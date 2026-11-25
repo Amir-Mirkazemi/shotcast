@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
@@ -16,8 +17,9 @@ from .leaderboard import read_records, totals_from_records
 from .sitedata import MIN_MINUTES_PER90, build_model, featured_ids, rank_map, slug
 from .storage import get_store
 
-SITE_NAME = "Far Post"
-REPO_URL = "https://github.com/Amir-Mirkazemi/pitchline-live"
+SITE_NAME = "Shotcast"
+# in GitHub Actions the link follows the repository name, so renaming the repo does not break it
+REPO_URL = "https://github.com/" + os.environ.get("GITHUB_REPOSITORY", "Amir-Mirkazemi/pitchline-live")
 
 LEAGUE_NAMES = {
     "eng.1": "Premier League", "esp.1": "La Liga", "ita.1": "Serie A", "fra.1": "Ligue 1",
@@ -26,15 +28,17 @@ LEAGUE_NAMES = {
 }
 
 CSS = """
-:root { --bg:#0a0f0d; --panel:#111915; --panel2:#17211b; --line:#223028; --text:#e8f0ea; --muted:#8aa196;
-  --accent:#b6f23f; --ink:#0a0f0d; --blue:#4cc9f0; --amber:#ffd166; --red:#ff6b6b; --grey:#7f8f86; }
-@media (prefers-color-scheme: light) {
-  :root { --bg:#f4f7f2; --panel:#fff; --panel2:#eef3ec; --line:#d9e2d6; --text:#16201a; --muted:#5b6b61;
-    --accent:#2f8f1f; --ink:#fff; --blue:#0b7fb0; --amber:#b98100; --red:#c93a3a; --grey:#7a877f; }
-}
+:root { --bg:#f6f5ef; --panel:#fff; --panel2:#f0efe6; --line:#e2e0d3; --text:#1b201c; --muted:#657067;
+  --accent:#16833a; --ink:#fff; --blue:#1479b8; --amber:#c88a00; --red:#d64545; --grey:#8a948d;
+  --pitch:#e3f1d9; --pline:#fff; --glow:#dcefd0;
+  --shadow:0 1px 2px rgba(20,30,20,.06), 0 6px 18px rgba(20,30,20,.05); }
+:root[data-theme="dark"] { --bg:#0a0f0d; --panel:#111915; --panel2:#17211b; --line:#223028; --text:#e8f0ea;
+  --muted:#8aa196; --accent:#b6f23f; --ink:#0a0f0d; --blue:#4cc9f0; --amber:#ffd166; --red:#ff6b6b;
+  --grey:#7f8f86; --pitch:#143222; --pline:#2d4a38; --glow:#14301f; --shadow:none; }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
-body { margin:0; background:var(--bg); color:var(--text);
+body { margin:0; background:radial-gradient(1100px 360px at 50% -90px, var(--glow), var(--bg)) no-repeat var(--bg);
+  color:var(--text);
   font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
 a { color:var(--accent); text-underline-offset:3px; }
 .wrap { max-width:1040px; margin:0 auto; padding:0 18px; }
@@ -45,6 +49,8 @@ a { color:var(--accent); text-underline-offset:3px; }
 .brand svg { width:26px; height:26px; color:var(--accent); }
 .top nav { display:flex; gap:18px; margin-left:auto; font-size:.92rem; }
 .top nav a { color:var(--muted); text-decoration:none; } .top nav a:hover { color:var(--text); }
+.top nav button { background:none; border:1px solid var(--line); color:var(--muted); border-radius:999px;
+  padding:3px 12px; font:inherit; font-size:.82rem; cursor:pointer; } .top nav button:hover { color:var(--text); }
 .hero { padding:44px 0 26px; }
 .hero h1 { font-size:clamp(2rem,5vw,3.2rem); line-height:1.08; margin:0 0 12px; letter-spacing:-.02em; }
 .hero h1 em { font-style:normal; color:var(--accent); }
@@ -53,21 +59,21 @@ a { color:var(--accent); text-underline-offset:3px; }
   background:var(--panel); border:1px solid var(--line); border-radius:10px; outline:none; }
 .search:focus { border-color:var(--accent); }
 .strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin:26px 0 8px; }
-.kpi { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+.kpi { box-shadow:var(--shadow); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
 .kpi b { display:block; font-size:1.5rem; line-height:1.2; font-variant-numeric:tabular-nums;
   white-space:nowrap; }
 .kpi span { color:var(--muted); font-size:.82rem; }
 h2 { font-size:1.15rem; margin:34px 0 12px; letter-spacing:.01em; }
 h2 small { color:var(--muted); font-weight:400; font-size:.85rem; margin-left:8px; }
 .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(235px,1fr)); gap:12px; }
-.card { display:block; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px;
+.card { box-shadow:var(--shadow); display:block; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px;
   color:var(--text); text-decoration:none; transition:border-color .15s, transform .15s; }
 .card:hover { border-color:var(--accent); transform:translateY(-2px); }
 .card h3 { margin:0 0 2px; font-size:1.05rem; }
 .card .sub { color:var(--muted); font-size:.8rem; }
 .card .lead { margin-top:10px; font-size:.88rem; color:var(--muted); }
 .card .lead b { color:var(--accent); font-variant-numeric:tabular-nums; }
-.results { list-style:none; margin:0; padding:0; background:var(--panel); border:1px solid var(--line);
+.results { box-shadow:var(--shadow); list-style:none; margin:0; padding:0; background:var(--panel); border:1px solid var(--line);
   border-radius:12px; overflow:hidden; }
 .results li { display:grid; grid-template-columns:78px 1fr auto 1fr auto; gap:10px; padding:10px 14px; align-items:center;
   border-bottom:1px solid var(--line); font-size:.92rem; }
@@ -81,7 +87,7 @@ h2 small { color:var(--muted); font-weight:400; font-size:.85rem; margin-left:8p
   padding:7px 14px; font:inherit; font-size:.88rem; cursor:pointer; }
 .tabs button[aria-pressed=true] { background:var(--accent); color:var(--ink); border-color:var(--accent);
   font-weight:700; }
-.tablewrap { overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+.tablewrap { box-shadow:var(--shadow); overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px; }
 table { border-collapse:collapse; width:100%; }
 th, td { padding:9px 12px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
 tr:last-child td { border-bottom:0; }
@@ -104,16 +110,17 @@ td.hl b { position:relative; }
   grid-template-columns:74px 1fr auto 1fr; padding:9px 10px; font-size:.86rem; } .results .lg { display:none; }
   .results .d { font-size:.74rem; } .kpi b { font-size:1.25rem; }
   .top .wrap { gap:12px; } .top nav { gap:12px; font-size:.85rem; } }
-.pitch { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; }
+.pitch { box-shadow:var(--shadow); background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; }
 .pitch svg { width:100%; height:auto; display:block; }
-.pl { fill:none; stroke:var(--line); stroke-width:3; } .pl.goal { stroke:var(--muted); }
-.dot { stroke:var(--bg); stroke-width:2; opacity:.92; }
+.pl { fill:none; stroke:var(--pline); stroke-width:3; } .pl.goal { stroke:var(--muted); }
+.turf { fill:var(--pitch); stroke:none; }
+.dot { stroke:var(--panel); stroke-width:2; opacity:.95; }
 .s-goal { fill:var(--accent); stroke:var(--text); stroke-width:3; } .s-saved { fill:var(--blue); }
 .s-woodwork { fill:var(--amber); } .s-off_target { fill:var(--red); } .s-blocked { fill:var(--grey); }
 .s-own_goal { fill:var(--grey); }
 .legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin:10px 2px 2px; font-size:.82rem; color:var(--muted); }
 .legend i { display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:6px; vertical-align:-1px; }
-.bars { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
+.bars { box-shadow:var(--shadow); background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 16px; }
 .bars h3 { margin:6px 0 8px; font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
 .bar { display:grid; grid-template-columns:110px 1fr 34px; gap:10px; align-items:center; font-size:.88rem;
   margin:5px 0; }
@@ -140,6 +147,16 @@ document.querySelectorAll('.tabs button').forEach(btn => btn.addEventListener('c
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-pressed', b === btn));
   document.querySelectorAll('.panel').forEach(p => { p.hidden = p.id !== btn.dataset.tab; });
 }));
+const root = document.documentElement, tb = document.getElementById('theme');
+if (tb) {
+  const label = () => { tb.textContent = root.dataset.theme === 'dark' ? 'Light' : 'Dark'; };
+  label();
+  tb.addEventListener('click', () => {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+    label();
+  });
+}
 const box = document.getElementById('q');
 if (box) {
   let data = null;
@@ -177,15 +194,15 @@ def lname(slug_: str) -> str:
 def page(title: str, body: str, desc: str = "") -> str:
     d = f'<meta name="description" content="{escape(desc)}">' if desc else ""
     return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
+<html lang="en" data-theme="light"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0a0f0d">
+<script>try{{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}}catch(e){{}}</script>
 <title>{escape(title)}</title>{d}
 <link rel="icon" href="{FAVICON}">
 <link rel="stylesheet" href="style.css"></head>
 <body>
 <div class="top"><div class="wrap"><a class="brand" href="index.html">{LOGO}{SITE_NAME}</a>
-<nav><a href="index.html">Competitions</a><a href="method.html">Method</a><a href="{REPO_URL}">GitHub</a></nav>
+<nav><a href="index.html">Competitions</a><a href="method.html">Method</a><a href="{REPO_URL}">GitHub</a><button id="theme" type="button">Dark</button></nav>
 </div></div>
 <div class="wrap">{body}
 <footer>Match data from ESPN (unofficial endpoints). Not affiliated with ESPN or any league.
@@ -355,13 +372,14 @@ SITUATION = {"open_play": "Open play", "from_corner": "After a corner", "free_ki
              "penalty": "Penalty"}
 
 _PITCH = (
+    '<rect class="turf" x="-20" y="-28" width="720" height="580" rx="10"/>'
     '<rect class="pl" x="0" y="0" width="680" height="525"/>'
     '<rect class="pl" x="138.5" y="0" width="403" height="165"/>'
     '<rect class="pl" x="248.4" y="0" width="183.2" height="55"/>'
     '<rect class="pl goal" x="303.4" y="-18" width="73.2" height="18"/>'
     '<path class="pl" d="M266.9 165 A91.5 91.5 0 0 0 413.1 165"/>'
     '<path class="pl" d="M248.5 525 A91.5 91.5 0 0 1 431.5 525"/>'
-    '<circle cx="340" cy="110" r="3" fill="var(--line)"/>')
+    '<circle cx="340" cy="110" r="3" fill="var(--pline)"/>')
 
 
 def shot_map(shots: list[dict]) -> tuple[str, int]:
