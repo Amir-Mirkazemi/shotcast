@@ -220,6 +220,53 @@ def suspicious_lines(summary: dict, shots: list[dict]) -> list[str]:
     return out
 
 
+_SUMMARY_LINE = re.compile(r"\) (?:Shot|Penalty)\b.* at \d+'\s*$")
+
+
+def drop_duplicate_shots(shots: list[dict], totals: dict[str, dict]) -> tuple[list[dict], int]:
+    """ESPN sometimes lists one shot twice: as a long commentary line and again as a one-line summary
+    ("Name (Team) Shot Blocked at 20'") or as a plain-text twin of a structured play. When a team has MORE
+    parsed shots than ESPN's own total, drop that many likely duplicates, but only if the team then matches
+    ESPN's total exactly. If it would not match, nothing is dropped: the match stays flagged."""
+    if not boxscore_usable(totals):
+        return shots, 0
+    drop: set[int] = set()
+    for team, tot in totals.items():
+        try:
+            expected = int(tot["totalShots"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        mine = [i for i, sh in enumerate(shots) if sh["team"] == team and sh["outcome"] != "own_goal"]
+        extra = len(mine) - expected
+        if extra <= 0:
+            continue
+        summaries = [i for i in mine if _SUMMARY_LINE.search(shots[i].get("raw_text") or "")]
+        twins = [i for i in mine if i not in summaries and str(shots[i]["play_id"]).startswith("text:")
+                 and any(j != i and shots[j]["player"] == shots[i]["player"]
+                         and abs((shots[j]["seconds"] or 0) - (shots[i]["seconds"] or 0)) <= 120
+                         for j in mine)]
+        candidates = summaries + twins
+        if len(candidates) >= extra:
+            drop.update(candidates[:extra])
+    if not drop:
+        return shots, 0
+    kept = [sh for i, sh in enumerate(shots) if i not in drop]
+    return (kept, len(drop)) if all(
+        _count(kept, t) == _expected(tot) for t, tot in totals.items() if _expected(tot) is not None
+        and _count(shots, t) > _expected(tot)) else (shots, 0)
+
+
+def _expected(tot: dict) -> int | None:
+    try:
+        return int(tot["totalShots"])
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def _count(shots: list[dict], team: str) -> int:
+    return sum(1 for sh in shots if sh["team"] == team and sh["outcome"] != "own_goal")
+
+
 def process_event(store: Store, league: str, ev: dict, fetch, retry_bad: bool = False,
                   upgrade: bool = False) -> str | None:
     key = f"espn/matches/{league}/{ev['id']}.json"
@@ -231,6 +278,7 @@ def process_event(store: Store, league: str, ev: dict, fetch, retry_bad: bool = 
             return None
     summary, _ = fetch(f"{BASE}/{league}/summary?event={ev['id']}")
     shots = parse_shots(summary, ev["id"], league)
+    shots, deduped = drop_duplicate_shots(shots, _totals(summary))
     comp = ev["competitions"][0]
     rec = {
         "league": league, "event_id": ev["id"], "date": ev["date"],
@@ -238,7 +286,7 @@ def process_event(store: Store, league: str, ev: dict, fetch, retry_bad: bool = 
         "teams": [{"name": c["team"]["displayName"], "home": c["homeAway"] == "home",
                    "score": c.get("score")} for c in comp["competitors"]],
         "boxscore_totals": _totals(summary), "shots": shots, "players": _players(summary),
-        "lineup": _lineup(summary), "schema": SCHEMA,
+        "lineup": _lineup(summary), "schema": SCHEMA, "duplicates_dropped": deduped,
     }
     rec["on_target_gap"] = on_target_gap(shots, rec["boxscore_totals"])
     detail: list[str] = []
@@ -313,6 +361,9 @@ def main(argv=None) -> int:
         targets = yaml.safe_load(open(a.targets))["targets"]
     elif a.recent:
         targets = recent_targets(datetime.now(timezone.utc).date(), a.recent)
+    elif a.league == "all" and a.start and a.end:
+        from .live import LEAGUES
+        targets = [{"league": lg, "from": a.start, "to": a.end} for lg in LEAGUES]
     elif a.league and a.start and a.end:
         targets = [{"league": a.league, "from": a.start, "to": a.end}]
     else:

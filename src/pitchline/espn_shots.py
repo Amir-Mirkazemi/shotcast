@@ -119,14 +119,39 @@ _ASSIST = re.compile(r"Assisted by (.+?)(?: with | following |\.|$)")
 _TEXT_OUTCOME = {"missed": ("off_target", False), "saved": ("saved", True), "blocked": ("blocked", False)}
 
 
-def _text_only_shot(entry: dict, team_names: dict[str, str], event_id: str, league: str) -> dict | None:
+def roster_teams(summary: dict[str, Any]) -> tuple[dict[str, str], dict[str, str]]:
+    """Which team each player plays for in this match, from ESPN's rosters: (full name, last name) -> team.
+    A name that belongs to players on both teams is left out rather than guessed."""
+    full: dict[str, set] = {}
+    last: dict[str, set] = {}
+    for r in summary.get("rosters", []):
+        team = (r.get("team") or {}).get("displayName")
+        for pl in r.get("roster", []):
+            name = (pl.get("athlete") or {}).get("displayName") or ""
+            if not (team and name):
+                continue
+            full.setdefault(_norm(name), set()).add(team)
+            last.setdefault(_norm(name.split()[-1]), set()).add(team)
+    pick = lambda d: {k: next(iter(v)) for k, v in d.items() if len(v) == 1}  # noqa: E731
+    return pick(full), pick(last)
+
+
+def _team_for_player(player: str, roster: tuple[dict[str, str], dict[str, str]]) -> str | None:
+    """Fallback when the team named in the text differs from the boxscore name ("FC Bayern Munchen" vs
+    "Bayern Munich"): use the team the roster says this player is on."""
+    full, last = roster
+    return full.get(_norm(player)) or last.get(_norm(player.split()[-1] if player.split() else ""))
+
+
+def _text_only_shot(entry: dict, team_names: dict[str, str], event_id: str, league: str,
+                    roster: tuple[dict[str, str], dict[str, str]] = ({}, {})) -> dict | None:
     """Shots that ESPN publishes as plain commentary text with no structured `play` (no coordinates)."""
     text = entry.get("text") or ""
     m = _TEXT_SHOT.match(text)
     if not m:
         return None
     kind, player, team_txt = m.groups()
-    team = resolve_team(team_txt, team_names)
+    team = resolve_team(team_txt, team_names) or _team_for_player(player, roster)
     if team is None:
         return None
     outcome, on_target = _TEXT_OUTCOME[kind]
@@ -149,10 +174,11 @@ def parse_shots(summary: dict[str, Any], event_id: str, league: str) -> list[dic
     rows: list[dict[str, Any]] = []
     team_names = {_norm(t["team"]["displayName"]): t["team"]["displayName"]
                   for t in summary.get("boxscore", {}).get("teams", []) if t.get("team")}
+    roster = roster_teams(summary)
     for entry in summary.get("commentary", []):
         play = entry.get("play")
         if not play:
-            extra = _text_only_shot(entry, team_names, event_id, league)
+            extra = _text_only_shot(entry, team_names, event_id, league, roster)
             if extra:
                 rows.append(extra)
             continue

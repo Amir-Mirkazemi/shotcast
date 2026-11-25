@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       league:
-        description: "ESPN league slug (leave empty to use config/espn_targets.yml)"
+        description: "ESPN league slug, or all for every tracked competition (empty = nightly recent catch-up)"
         required: false
       from:
         description: "Start date YYYY-MM-DD"
@@ -54,5 +54,5 @@ jobs:
           if [ -n "$IN_LEAGUE" ]; then
             python -m pitchline.espn_backfill --league "$IN_LEAGUE" --from "$IN_FROM" --to "$IN_TO" --max-minutes 300 $FLAG
           else
-            python -m pitchline.espn_backfill --recent 5 --max-minutes 300 $FLAG
+            python -m pitchline.espn_backfill --recent 5 --retry-bad --max-minutes 300 $FLAG
           fi

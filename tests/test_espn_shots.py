@@ -152,3 +152,21 @@ def test_text_only_shot_matches_team_despite_accents():
     rows = parse_shots(summary, "1", "esp.1")
     assert [(r["team"], r["player"], r["outcome"]) for r in rows] == [
         ("Cádiz", "Roger Martí", "saved"), ("Alavés", "Jon Guridi", "blocked")]
+
+
+def test_text_only_shot_uses_roster_when_team_name_in_text_differs_from_boxscore():
+    summary = {**_box("Bayern Munich", "Hertha Berlin"),
+               "rosters": [{"team": {"displayName": "Bayern Munich"}, "roster": [
+                               {"athlete": {"displayName": "Thomas Müller"}}]},
+                           {"team": {"displayName": "Hertha Berlin"}, "roster": [
+                               {"athlete": {"displayName": "Jerry St. Juste"}}]}],
+               "commentary": [
+                   {"sequence": 1, "time": {"value": 60.0},
+                    "text": "Attempt saved. Thomas Müller (FC Bayern München) right footed shot from the centre of the box is saved."},
+                   {"sequence": 2, "time": {"value": 70.0},
+                    "text": "Attempt missed. Jeremiah St. Juste (Mystery Name) header from the centre of the box is close."},
+                   {"sequence": 3, "time": {"value": 80.0},
+                    "text": "Attempt saved. Nobody Known (Mystery Name) right footed shot is saved."}]}
+    rows = parse_shots(summary, "9", "ger.1")
+    assert [(r["player"], r["team"]) for r in rows] == [("Thomas Müller", "Bayern Munich"),
+                                                        ("Jeremiah St. Juste", "Hertha Berlin")]

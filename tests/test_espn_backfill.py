@@ -235,3 +235,42 @@ def test_recent_targets_cover_every_tracked_competition():
     t = recent_targets(date(2026, 11, 24), 5)
     assert [x["league"] for x in t] == LEAGUES
     assert t[0] == {"league": "eng.1", "from": "2026-11-19", "to": "2026-11-24"}
+
+
+def test_league_all_expands_to_every_tracked_competition(monkeypatch, tmp_path):
+    import pitchline.espn_backfill as eb
+    from pitchline.live import LEAGUES
+    seen = []
+    monkeypatch.setattr(eb, "backfill", lambda store, league, *a, **k: seen.append(league) or {
+        "listed": 0, "new": 0, "skipped": 0, "failed": 0, "stopped_early": False, "mismatch": 0, "ok": 0})
+    eb.main(["--root", str(tmp_path), "--league", "all", "--from", "2026-01-01", "--to", "2026-01-02"])
+    assert seen == LEAGUES
+
+
+def _row(team, player, pid, secs, text="Attempt saved. X (T) right footed shot is saved."):
+    return {"team": team, "player": player, "play_id": pid, "seconds": secs, "outcome": "saved", "raw_text": text}
+
+
+def _tot(a, b):
+    return {"Home": {"totalShots": a}, "Away": {"totalShots": b}}
+
+
+def test_duplicate_summary_line_is_dropped_only_when_the_total_then_matches_exactly():
+    shots = [_row("Home", "A", "1", 100), _row("Home", "B", "2", 200),
+             _row("Home", "A", "3", 101, "A (Home) Shot Saved at 2'"), _row("Away", "C", "4", 300)]
+    kept, n = eb.drop_duplicate_shots(shots, _tot(2, 1))
+    assert n == 1 and [s["play_id"] for s in kept] == ["1", "2", "4"]
+    same, none = eb.drop_duplicate_shots(shots, _tot(1, 1))     # dropping one would still leave 2 vs 1: no change
+    assert none == 0 and same == shots
+
+
+def test_text_only_twin_of_a_structured_shot_is_dropped():
+    shots = [_row("Home", "A", "11", 100), _row("Home", "A", "text:5", 103), _row("Home", "B", "12", 900)]
+    kept, n = eb.drop_duplicate_shots(shots, {"Home": {"totalShots": 2}, "Away": {"totalShots": 0}})
+    assert n == 1 and [s["play_id"] for s in kept] == ["11", "12"]
+
+
+def test_nothing_is_dropped_when_nothing_looks_duplicated_or_boxscore_is_empty():
+    shots = [_row("Home", "A", "1", 100), _row("Home", "B", "2", 200)]
+    assert eb.drop_duplicate_shots(shots, _tot(1, 0)) == (shots, 0)
+    assert eb.drop_duplicate_shots(shots, _tot(0, 0)) == (shots, 0)
