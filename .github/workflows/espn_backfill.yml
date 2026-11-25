@@ -23,7 +23,8 @@ on:
         required: false
         default: "false"
 
-concurrency: espn-backfill
+# one run per league at a time, so different leagues can load in parallel (the nightly run has its own group)
+concurrency: espn-backfill-${{ github.event.inputs.league || 'nightly' }}
 
 jobs:
   backfill:
