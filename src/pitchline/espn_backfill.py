@@ -13,7 +13,7 @@ import json
 import logging
 import re
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from .espn_shots import classify_type, entry_play_id, parse_shots
 from .http import HttpStatus, get_json
@@ -281,12 +281,21 @@ def backfill(store: Store, league: str, start: date, end: date, fetch=None, slee
     return stats
 
 
+def recent_targets(today: date, days: int) -> list[dict]:
+    """Every competition the site tracks, for the last few days: the nightly catch-up."""
+    from .live import LEAGUES
+    return [{"league": lg, "from": (today - timedelta(days=days)).isoformat(), "to": today.isoformat()}
+            for lg in LEAGUES]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--league")
     ap.add_argument("--from", dest="start")
     ap.add_argument("--to", dest="end")
     ap.add_argument("--targets", help="YAML list of {league, from, to}; processed in order")
+    ap.add_argument("--recent", type=int, metavar="DAYS",
+                    help="all tracked competitions for the last DAYS days (the nightly catch-up)")
     ap.add_argument("--root")
     ap.add_argument("--window", type=int, default=7)
     ap.add_argument("--retry-bad", action="store_true",
@@ -302,10 +311,12 @@ def main(argv=None) -> int:
         import yaml
 
         targets = yaml.safe_load(open(a.targets))["targets"]
+    elif a.recent:
+        targets = recent_targets(datetime.now(timezone.utc).date(), a.recent)
     elif a.league and a.start and a.end:
         targets = [{"league": a.league, "from": a.start, "to": a.end}]
     else:
-        ap.error("give --targets, or --league with --from and --to")
+        ap.error("give --targets, --recent, or --league with --from and --to")
     t0, bad = time.monotonic(), False
     for t in targets:
         left = a.max_minutes - (time.monotonic() - t0) / 60

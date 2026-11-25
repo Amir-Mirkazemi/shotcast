@@ -54,5 +54,5 @@ jobs:
           if [ -n "$IN_LEAGUE" ]; then
             python -m pitchline.espn_backfill --league "$IN_LEAGUE" --from "$IN_FROM" --to "$IN_TO" --max-minutes 300 $FLAG
           else
-            python -m pitchline.espn_backfill --targets config/espn_targets.yml --max-minutes 300 $FLAG
+            python -m pitchline.espn_backfill --recent 5 --max-minutes 300 $FLAG
           fi

@@ -1,0 +1,39 @@
+name: live
+
+# Near-live scores. Every 15 minutes this fetches today's scoreboard for all competitions and publishes one small
+# file, live.json, to a branch called live-data. The Live page reads it from there. The branch holds a single
+# commit that is replaced each time, so the repository does not grow.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live
+  cancel-in-progress: true
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests && pip install -e . --no-deps
+      - name: Fetch scores
+        run: python -m pitchline.live --out live.json
+      - name: Publish to the live-data branch
+        run: |
+          mkdir out && mv live.json out/
+          cd out
+          git init -q -b live-data
+          git config user.name "shotcast-live"
+          git config user.email "actions@users.noreply.github.com"
+          git add live.json
+          git commit -q -m "live scores $(date -u +%H:%M)"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" live-data

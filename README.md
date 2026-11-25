@@ -118,16 +118,22 @@ before publishing analysis built on it; it requires crediting StatsBomb as the s
 
 ---
 
-## Status: Pitchline Live (work in progress)
+## Status: Shotcast (work in progress)
 
 Pitchline is being extended from a one-tournament demo into a multi-league pipeline that tracks
 player shot and chance creation totals across years and updates as matches finish.
 
-**Live site (Shotcast):** https://amir-mirkazemi.github.io/pitchline-live/ (per-competition leaderboards for
-shots on target, goals, assists and on-target-per-90, team pages, player pages with shot maps, player search,
-and a data-quality page; rebuilt automatically from the stored matches by `.github/workflows/site.yml`,
-code in `src/pitchline/site.py`). ESPN reports shot locations in two different coordinate formats; the
-shot maps detect the format per match.
+**Live site (Shotcast):** https://amir-mirkazemi.github.io/shotcast/
+- Leaderboards per competition (on target, goals, assists, on target per 90), team pages, player pages with
+  shot maps, player search, and an all-competitions "Best of the best" top 10 (unadjusted counts, labeled).
+- Near-live scores for every competition, refreshed about every 15 minutes (`live.yml`, `live.py`).
+- Forecasts of shots on target for the next matchday and the season: Poisson models with a time-ordered
+  backtest against a plain baseline, saved before matches and graded afterwards on a public scorecard
+  (`forecast.py`, `forecast.yml`). If no model beats the baseline, the page says so and uses the baseline.
+- "Call your shot": fans pick season leaders; picks stay in the browser (localStorage).
+- Link-preview images for sharing are generated at build time (`cards.py`).
+- Rebuilt automatically: nightly download of recent matches -> forecast -> site build.
+- ESPN reports shot locations in two coordinate formats; the shot maps detect the format per match.
 
 **Built and tested**
 - ESPN commentary parser: one row per shot with location (when ESPN provides it), body part, situation,
@@ -152,7 +158,7 @@ shot maps detect the format per match.
   that run on a schedule in GitHub Actions and write to S3.
 
 **Not built yet**
-- Running per-player totals in dbt, the "Danger" ranking, and the live poller.
+- Running per-player totals in dbt and the "Danger" ranking.
 - Validation of ESPN coordinates against StatsBomb on the *same* matches.
 
 **Data notes**

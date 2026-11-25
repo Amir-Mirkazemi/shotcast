@@ -225,3 +225,13 @@ def test_upgrade_redownloads_only_old_layout_files(tmp_path):
     store.write_bytes("espn/matches/eng.1/1.json", json.dumps(rec).encode())
     eb.backfill(*args, make_fetch(_summary(3, 1), log), sleep=lambda s: None, upgrade=True)
     assert any("summary" in u for u in log)                               # old layout: refetched
+
+
+def test_recent_targets_cover_every_tracked_competition():
+    from datetime import date
+
+    from pitchline.espn_backfill import recent_targets
+    from pitchline.live import LEAGUES
+    t = recent_targets(date(2026, 11, 24), 5)
+    assert [x["league"] for x in t] == LEAGUES
+    assert t[0] == {"league": "eng.1", "from": "2026-11-19", "to": "2026-11-24"}

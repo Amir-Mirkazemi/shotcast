@@ -109,3 +109,33 @@ def featured_ids(rows: list[dict]) -> set[str]:
         pool.sort(key=lambda r: (-r[key], -r["shots"], r["player"]))
         keep |= {r["pid"] for r in pool[:n] if r[key] > 0}
     return keep
+
+
+MIN_MINUTES_BEST = 1800          # the all-competitions per-90 board needs 20 full matches of known minutes
+_SUMS = ("shots", "shots_on_target", "goals", "assists", "apps", "minutes", "lineup_matches", "matches",
+         "lc_shots", "lc_sot", "lc_goals", "lc_assists")
+
+
+def combined_rows(players: dict) -> list[dict]:
+    """One row per player across every competition (domestic league, continental cups, World Cup).
+
+    Rows are merged by ESPN athlete id. A row without an id is never merged, because two different
+    players can share a name. The team and the home page come from the competition where the player has
+    the most matches."""
+    merged: dict[str, dict] = {}
+    for (lg, pid), r in players.items():
+        key = r["athlete_id"] or f"{lg}:{pid}"
+        m = merged.setdefault(key, {k: 0 for k in _SUMS} | {"player": r["player"], "team": r["team"],
+                                                           "athlete_id": r["athlete_id"], "leagues": {},
+                                                           "best_league": lg, "best_pid": pid, "_top": -1})
+        for k in _SUMS:
+            m[k] += r[k]
+        m["leagues"][lg] = m["leagues"].get(lg, 0) + r["shots_on_target"]
+        if r["matches"] > m["_top"]:
+            m.update(team=r["team"], best_league=lg, best_pid=pid, _top=r["matches"])
+    rows = list(merged.values())
+    for m in rows:
+        ok = m["lineup_matches"] and m["minutes"] >= MIN_MINUTES_BEST
+        m["sot90"] = m["lc_sot"] * 90 / m["minutes"] if ok else None
+        m["pid"] = m["athlete_id"] or m["best_pid"]
+    return rows

@@ -13,11 +13,26 @@ from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
+from . import cards
+from .forecast import load_forecasts, scorecard
 from .leaderboard import read_records, totals_from_records
-from .sitedata import MIN_MINUTES_PER90, build_model, featured_ids, rank_map, slug
+from .sitedata import (
+    MIN_MINUTES_BEST,
+    MIN_MINUTES_PER90,
+    build_model,
+    combined_rows,
+    featured_ids,
+    rank_map,
+    slug,
+)
 from .storage import get_store
 
 SITE_NAME = "Shotcast"
+OWNER = "Amir Mirkazemi"
+OWNER_LINKS = (("LinkedIn", "https://www.linkedin.com/in/amir-mirkazemi/"),
+               ("GitHub", "https://github.com/Amir-Mirkazemi"), ("amirdata.com", "https://www.amirdata.com/"))
+# absolute address of the published site, needed for link previews (set by the workflow)
+SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
 # in GitHub Actions the link follows the repository name, so renaming the repo does not break it
 REPO_URL = "https://github.com/" + os.environ.get("GITHUB_REPOSITORY", "Amir-Mirkazemi/pitchline-live")
 
@@ -81,8 +96,13 @@ h2 small { color:var(--muted); font-weight:400; font-size:.85rem; margin-left:8p
 .results .d { color:var(--muted); font-size:.8rem; white-space:nowrap; } .results .h { text-align:right; }
 .results .sc { font-weight:800; font-variant-numeric:tabular-nums; background:var(--panel2); padding:2px 10px;
   border-radius:6px; }
+.results li.on .d { color:var(--green,#16833a); font-weight:700; } .results li.on .sc { background:var(--green,#16833a); color:#fff; }
 .results .lg { color:var(--muted); font-size:.75rem; text-align:right; min-width:92px; }
 .tabs { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 12px; }
+.pick { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:999px; padding:3px 12px; cursor:pointer; font:inherit; font-size:.8rem; }
+.pick[aria-pressed=true] { background:var(--accent); border-color:var(--accent); font-weight:700; }
+#call-lg { font:inherit; padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--ink); margin:8px 0; }
+h3 { margin:22px 0 8px; font-size:1.05rem; }
 .tabs button { background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:999px;
   padding:7px 14px; font:inherit; font-size:.88rem; cursor:pointer; }
 .tabs button[aria-pressed=true] { background:var(--accent); color:var(--ink); border-color:var(--accent);
@@ -109,7 +129,8 @@ td.hl b { position:relative; }
 @media (max-width:760px) { .mapbox { grid-template-columns:1fr; } .opt { display:none; } .results li {
   grid-template-columns:74px 1fr auto 1fr; padding:9px 10px; font-size:.86rem; } .results .lg { display:none; }
   .results .d { font-size:.74rem; } .kpi b { font-size:1.25rem; }
-  .top .wrap { gap:12px; } .top nav { gap:12px; font-size:.85rem; } }
+  .top .wrap { gap:12px; } .top nav { gap:10px; font-size:.8rem; flex-wrap:wrap; justify-content:flex-end; } .top .wrap { height:auto;
+  padding-top:8px; padding-bottom:8px; } }
 .pitch { box-shadow:var(--shadow); background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; }
 .pitch svg { width:100%; height:auto; display:block; }
 .pl { fill:none; stroke:var(--pline); stroke-width:3; } .pl.goal { stroke:var(--muted); }
@@ -191,22 +212,36 @@ def lname(slug_: str) -> str:
     return LEAGUE_NAMES.get(slug_, slug_)
 
 
-def page(title: str, body: str, desc: str = "") -> str:
+def page(title: str, body: str, desc: str = "", path: str = "", image: str = "") -> str:
     d = f'<meta name="description" content="{escape(desc)}">' if desc else ""
+    og = ""
+    if SITE_URL:
+        og = (f'<meta property="og:site_name" content="{SITE_NAME}"><meta property="og:type" content="website">'
+              f'<meta property="og:title" content="{escape(title)}">'
+              f'<meta property="og:description" content="{escape(desc)}">'
+              f'<meta property="og:url" content="{SITE_URL}/{escape(path)}">')
+        if image:
+            og += (f'<meta property="og:image" content="{SITE_URL}/{escape(image)}">'
+                   '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">'
+                   '<meta name="twitter:card" content="summary_large_image">')
+    links = " · ".join(f'<a href="{u}">{n}</a>' for n, u in OWNER_LINKS)
     return f"""<!doctype html>
 <html lang="en" data-theme="light"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>try{{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}}catch(e){{}}</script>
-<title>{escape(title)}</title>{d}
+<title>{escape(title)}</title>{d}{og}
 <link rel="icon" href="{FAVICON}">
 <link rel="stylesheet" href="style.css"></head>
 <body>
 <div class="top"><div class="wrap"><a class="brand" href="index.html">{LOGO}{SITE_NAME}</a>
-<nav><a href="index.html">Competitions</a><a href="method.html">Method</a><a href="{REPO_URL}">GitHub</a><button id="theme" type="button">Dark</button></nav>
+<nav><a href="best.html">Best of</a><a href="index.html">Leagues</a><a href="live.html">Live</a>
+<a href="forecast.html">Forecast</a><a href="call.html">Call your shot</a><a href="about.html">About</a>
+<button id="theme" type="button">Dark</button></nav>
 </div></div>
 <div class="wrap">{body}
-<footer>Match data from ESPN (unofficial endpoints). Not affiliated with ESPN or any league.
-Open-source pipeline on <a href="{REPO_URL}">GitHub</a>.</footer></div>
+<footer>Built by <b>{OWNER}</b> · {links}<br>Match data from ESPN (unofficial endpoints). Not affiliated with ESPN
+or any league. <a href="method.html">Method</a> · <a href="how.html">How it is built</a> ·
+<a href="{REPO_URL}">Source code</a></footer></div>
 <script src="app.js"></script>
 </body></html>
 """
@@ -311,7 +346,8 @@ aria-label="Search a player"><div id="results"></div>
 <p class="note">Leaderboards are per competition on purpose: leagues differ in strength and in how many matches
 are stored, so one combined ranking would not be a fair comparison. See <a href="method.html">method</a>.</p>"""
     return page(f"{SITE_NAME}: shots, goals and shot maps by player", body,
-                "Automatically updated player leaderboards and shot maps for the top soccer competitions.")
+                "Automatically updated player leaderboards, shot maps and forecasts for the top soccer competitions.",
+                "index.html", "og-home.png")
 
 
 def league_page(lg: str, v: dict, linked: set, n: int) -> str:
@@ -337,7 +373,7 @@ def league_page(lg: str, v: dict, linked: set, n: int) -> str:
 <h2>Latest results</h2><ul class="results">{results}</ul>
 <h2>Teams<small>record in the stored matches</small></h2><div class="cards">{teams}</div>"""
     return page(f"{lname(lg)} leaderboards | {SITE_NAME}", body,
-                f"Shots on target, goals and assists leaders in the {lname(lg)}.")
+                f"Shots on target, goals and assists leaders in the {lname(lg)}.", f"{lg}.html", f"og-{lg}.png")
 
 
 def team_page(lg: str, t: dict, v: dict, linked: set) -> str:
@@ -410,7 +446,7 @@ def _bars(title: str, counts: dict, labels: dict) -> str:
     return f"<h3>{escape(title)}</h3>{rows}"
 
 
-def player_page(lg: str, r: dict, shots: list[dict], ranks: dict) -> str:
+def player_page(lg: str, r: dict, shots: list[dict], ranks: dict, card: bool = False) -> str:
     sot_rank, goal_rank, size = ranks["sot"][r["pid"]], ranks["goals"][r["pid"]], ranks["size"]
     kpis = [("Apps", _cell(r, "apps")), ("Minutes", _cell(r, "minutes")), ("Shots", r["shots"]),
             ("On target", r["shots_on_target"]), ("Goals", r["goals"]), ("Assists", r["assists"]),
@@ -441,8 +477,322 @@ def player_page(lg: str, r: dict, shots: list[dict], ranks: dict) -> str:
 <span class="badge">Goals <b>#{goal_rank}</b> of {size}</span></section>
 <div class="strip">{strip}</div>
 <h2>Shot map<small>attacking goal at the top</small></h2>{mapbox}"""
+    url = player_url(lg, r["pid"])
     return page(f"{r['player']} | {lname(lg)} | {SITE_NAME}", body,
-                f"{r['player']}: shots, goals, assists and shot map in the {lname(lg)}.")
+                f"{r['player']}: shots, goals, assists and shot map in the {lname(lg)}.", url,
+                "og-" + url.replace(".html", ".png") if card else "og-home.png")
+
+
+def about_page() -> str:
+    links = " · ".join(f'<a href="{u}">{n}</a>' for n, u in OWNER_LINKS)
+    body = f"""
+<section class="ph"><h1>About {SITE_NAME}</h1></section>
+<p class="note">{SITE_NAME} is a soccer data project built end to end by <b>{OWNER}</b>, a data engineer
+completing an M.S. in Data Science at UC San Diego. It tracks who shoots and who finishes across nine
+competitions, shows where shots come from, forecasts shots on target, and keeps a public scorecard of
+how those forecasts turn out.</p>
+<h2>What is under it</h2>
+<ul class="plain">
+<li>A scheduled pipeline (Python, GitHub Actions) downloads match data, parses the commentary into one row per shot,
+checks every match against the source's own totals, and stores one JSON file per match in Amazon S3.</li>
+<li>This site is rebuilt from those files automatically, so a finished match appears without manual work.</li>
+<li>Forecasts use a Poisson model trained on past matches and are judged against a simple baseline in a
+time-ordered backtest; the results are on the <a href="forecast.html">forecast page</a>, including when the
+model is no better than the baseline.</li>
+<li>Everything is open source and tested; see <a href="how.html">how it is built</a> and
+<a href="method.html">the method and data quality</a>.</li>
+</ul>
+<h2>Contact</h2>
+<p class="note">{links}</p>"""
+    return page(f"About | {SITE_NAME}", body, f"{SITE_NAME} is a soccer data project built by {OWNER}.",
+                "about.html", "og-home.png")
+
+
+BEST_TABS = [("sot", "Most on target", "shots_on_target"), ("goals", "Most goals", "goals"),
+             ("p90", "On target per 90", "sot90")]
+
+
+LIVE_JS = """
+(function(){
+var box=document.getElementById("live"), meta=document.getElementById("live-meta"), url=box.dataset.src;
+var names=JSON.parse(box.dataset.names);
+function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function row(m){
+  var live=m.state==="in", done=m.state==="post", t=new Date(m.kickoff);
+  var when=live?(m.clock||m.detail):(done?"Full time":t.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}));
+  var sc=(live||done)?(m.home_score+" - "+m.away_score):"vs";
+  return '<li class="lv'+(live?' on':'')+'"><span class="d">'+esc(when)+'</span><span class="h">'+esc(m.home)+
+    '</span><b class="sc">'+esc(sc)+'</b><span class="a">'+esc(m.away)+'</span><span class="lg"></span></li>';
+}
+function draw(d){
+  var by={};d.matches.forEach(function(m){(by[m.league]=by[m.league]||[]).push(m)});
+  var html="";
+  Object.keys(by).sort(function(a,b){
+    var la=by[a].some(function(m){return m.state==="in"}), lb=by[b].some(function(m){return m.state==="in"});
+    return (lb-la)||String(names[a]||a).localeCompare(names[b]||b)}).forEach(function(k){
+    html+='<h2>'+esc(names[k]||k)+'</h2><ul class="results">'+by[k].map(row).join("")+'</ul>'});
+  box.innerHTML=html||'<p class="note">No matches in the window around today.</p>';
+  var age=Math.round((Date.now()-new Date(d.updated))/60000);
+  meta.textContent="Updated "+(age<1?"just now":age+" min ago")+(d.failed.length?" · unavailable: "+d.failed.join(", "):"");
+}
+function load(){fetch(url+"?t="+Date.now()).then(function(r){if(!r.ok)throw 0;return r.json()}).then(draw)
+  .catch(function(){meta.textContent="Live scores are not available right now."})}
+load();setInterval(load,60000);
+})();
+"""
+
+
+def live_page() -> str:
+    repo = os.environ.get("GITHUB_REPOSITORY", "Amir-Mirkazemi/pitchline-live")
+    src = f"https://raw.githubusercontent.com/{repo}/live-data/live.json"
+    body = f"""
+<section class="ph"><h1>Live scores</h1>
+<div class="meta" id="live-meta">Loading...</div></section>
+<div id="live" data-src="{src}" data-names='{escape(json.dumps(LEAGUE_NAMES), quote=True)}'></div>
+<p class="note">Scores are near-live: a scheduled job checks ESPN about every 15 minutes on match days, so a
+score can be a few minutes behind. Times are shown in your time zone. The page re-reads the file every minute.</p>
+<script>{LIVE_JS}</script>"""
+    return page(f"Live scores | {SITE_NAME}", body, "Near-live soccer scores for the top competitions.",
+                "live.html", "og-home.png")
+
+
+def _f(v, nd=2):
+    return "-" if v is None else f"{v:.{nd}f}"
+
+
+def _model_section(card: dict, sc: dict) -> str:
+    if not card:
+        return ""
+    res = card.get("results")
+    if not res:
+        return (f'<p class="note"><b>Model status: baseline only.</b> {escape(card.get("reason", ""))}. Until then the '
+                f'forecasts use each player\'s own recent rate times expected minutes.</p>')
+    names = {"baseline": "Baseline (own recent rate x minutes)", "league average": "Everyone gets the average",
+             "poisson": "Poisson regression", "boosted": "Gradient-boosted Poisson"}
+    rows = "".join(f"<tr><td>{names[k]}{' <b>(used)</b>' if k == card['best'] and card['beats_baseline'] else ''}</td>"
+                   f"<td class='n'>{_f(v['mae'], 3)}</td><td class='n'>{_f(v['deviance'], 3)}</td>"
+                   f"<td class='n'>{_f(v['bias'], 3)}</td></tr>" for k, v in res.items())
+    cal = "".join(f"<tr><td class='n'>{c['predicted']:.2f}</td><td class='n'>{c['actual']:.2f}</td>"
+                  f"<td class='n'>{c['n']:,}</td></tr>" for c in card["calibration"])
+    verdict = ("The model beat the baseline on matches it never saw, so it is used."
+               if card["beats_baseline"] else
+               "No model beat the baseline on matches it never saw, so the baseline is used. That is a real result: "
+               "shots on target are noisy and a simple rule is hard to beat.")
+    return f"""<h3>Backtest</h3>
+<p class="note">Trained on {card['train_rows']:,} player-matches up to {escape(card['train_until'])}, then tested on
+{card['test_rows']:,} later ones ({escape(card['test_from'])} to {escape(card['test_to'])}). Lower is better.
+{verdict}</p>
+<div class="tablewrap"><table><thead><tr><th>Method</th><th class="n">Avg miss (MAE)</th>
+<th class="n">Poisson deviance</th><th class="n">Bias</th></tr></thead><tbody>{rows}</tbody></table></div>
+<h3>Does it say what it means?</h3>
+<p class="note">Players sorted by predicted shots on target and split into five groups. If the model is honest, the
+two columns match.</p>
+<div class="tablewrap"><table><thead><tr><th class="n">Predicted (avg)</th><th class="n">Actual (avg)</th>
+<th class="n">Player-matches</th></tr></thead><tbody>{cal}</tbody></table></div>"""
+
+
+def _score_section(sc: dict) -> str:
+    if not sc.get("n"):
+        return ('<p class="note">Nothing graded yet. Each forecast is saved before the matches are played. '
+                'Once those matches are stored, this page compares what was predicted with what happened.</p>')
+    m, b = sc["model"], sc["baseline"]
+    return f"""<p class="note">{sc['n']:,} saved forecasts for {sc['matches']:,} matches that have since been played.
+Predicted {sc['predicted_total']:,} shots on target in total; the players had {sc['actual_total']:,}. Players who did
+not play count as 0, as they would for anyone using the forecast.</p>
+<div class="tablewrap"><table><thead><tr><th>Method</th><th class="n">Avg miss (MAE)</th><th class="n">Bias</th></tr></thead>
+<tbody><tr><td>Forecast</td><td class="n">{_f(m['mae'], 3)}</td><td class="n">{_f(m['bias'], 3)}</td></tr>
+<tr><td>Baseline</td><td class="n">{_f(b['mae'], 3)}</td><td class="n">{_f(b['bias'], 3)}</td></tr></tbody></table></div>"""
+
+
+def forecast_page(fc: dict | None, sc: dict) -> str:
+    if not fc:
+        body = """<section class="ph"><h1>Forecast</h1></section>
+<p class="note">The first forecast has not been generated yet. It appears here after the next scheduled run.</p>"""
+        return page(f"Forecast | {SITE_NAME}", body, "Shots on target forecasts.", "forecast.html", "og-home.png")
+    md = fc["matchday"][:20]
+    mrows = "".join(
+        f"<tr><td class='rk'>{i}</td><td class='who'>{escape(p['player'])}<small>{escape(p['team'])} "
+        f"{'vs' if p['home'] else '@'} {escape(p['opponent'])} · {escape(lname(p['league']))}</small></td>"
+        f"<td class='n opt'>{escape(p['kickoff'][:10])}</td><td class='n opt'>{_f(p['baseline'])}</td>"
+        f"<td class='n hl'><b>{_f(p['pred'])}</b></td></tr>" for i, p in enumerate(md, 1))
+    mtable = (f'<div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th><th class="n opt">Date</th>'
+              f'<th class="n opt">Baseline</th><th class="n">Expected on target</th></tr></thead><tbody>{mrows}'
+              f'</tbody></table></div>' if md else
+              '<p class="note">No upcoming matches in the next 7 days for the stored competitions.</p>')
+    seasons = ""
+    for lg, v in fc["season"].items():
+        rows = "".join(f"<tr><td class='rk'>{i}</td><td class='who'>{escape(r['player'])}<small>{escape(r['team'])}"
+                       f"</small></td><td class='n'>{r['so_far']}</td><td class='n opt'>{r['left']}</td>"
+                       f"<td class='n hl'><b>{r['proj']:.0f}</b></td><td class='n opt'>{r['lo']}-{r['hi']}</td></tr>"
+                       for i, r in enumerate(v["players"][:10], 1))
+        seasons += (f"<h3>{escape(lname(lg))}</h3><div class='tablewrap'><table><thead><tr><th class='n'>#</th>"
+                    f"<th>Player</th><th class='n'>So far</th><th class='n opt'>Matches left</th>"
+                    f"<th class='n'>Projected</th><th class='n opt'>Likely range</th></tr></thead>"
+                    f"<tbody>{rows}</tbody></table></div>")
+    body = f"""
+<section class="ph"><h1>Forecast</h1>
+<div class="meta">Shots on target · made {escape(fc['asof'][:16].replace('T', ' '))} UTC</div></section>
+<h2>Next matchday<small>expected shots on target, next 7 days</small></h2>{mtable}
+<h2>Season projection<small>shots on target by the end of the season</small></h2>
+<p class="note">Shots on target so far plus the expected rate times matches left. The range covers only the luck
+in the remaining matches (10th to 90th percentile), not injuries, transfers or changes in form, so it is narrower
+than reality. Leagues with a fixed schedule only.</p>{seasons}
+<h2>Scorecard<small>forecasts graded on what happened</small></h2>{_score_section(sc)}
+<h2>How the model is tested</h2>{_model_section(fc['model'], sc)}
+<p class="note">Method: for each player in each match, features known before kickoff (own shots-on-target rate over
+recent matches, shrunk toward the average, expected minutes, home or away, the team's shot volume and the opponent's
+shots conceded) feed a Poisson model. Newer matches are always the test set. Nothing is hidden when the model
+does not win.</p>"""
+    return page(f"Forecast | {SITE_NAME}", body, "Shots on target forecasts with a public backtest and scorecard.",
+                "forecast.html", "og-home.png")
+
+
+CALL_JS = """
+(function(){
+var box=document.getElementById("call"), data=JSON.parse(box.dataset.seasons), names=JSON.parse(box.dataset.names);
+var KEY="shotcast-picks-v1";
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){return {}}}
+function save(p){try{localStorage.setItem(KEY,JSON.stringify(p))}catch(e){}}
+function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+var picks=load(), lg=Object.keys(data)[0];
+var sel=document.getElementById("call-lg");
+Object.keys(data).forEach(function(k){var o=document.createElement("option");o.value=k;o.textContent=names[k]||k;sel.appendChild(o)});
+sel.onchange=function(){lg=sel.value;draw()};
+function draw(){
+  var d=data[lg]; if(!d){box.innerHTML='<p class="note">No projections yet.</p>';return}
+  var mine=picks[lg]||[];
+  var rows=d.players.map(function(p,i){
+    var on=mine.indexOf(p.athlete_id)>=0;
+    return '<tr><td class="rk">'+(i+1)+'</td><td class="who">'+esc(p.player)+'<small>'+esc(p.team)+'</small></td>'+
+      '<td class="n">'+p.so_far+'</td><td class="n hl"><b>'+Math.round(p.proj)+'</b></td>'+
+      '<td class="n"><button class="pick" data-id="'+p.athlete_id+'" aria-pressed="'+on+'">'+(on?"Picked":"Pick")+'</button></td></tr>'}).join("");
+  var chosen=d.players.filter(function(p){return mine.indexOf(p.athlete_id)>=0});
+  var yours=chosen.length?('<h2>Your picks</h2><ul class="plain">'+chosen.map(function(p){
+    return '<li><b>'+esc(p.player)+'</b> ('+esc(p.team)+'): '+p.so_far+' on target so far, the model projects '+Math.round(p.proj)+
+      ' (range '+p.lo+'-'+p.hi+')</li>'}).join("")+'</ul><p class="note">The model\'s top pick is <b>'+esc(d.players[0].player)+
+      '</b> ('+Math.round(d.players[0].proj)+'). Your picks stay in this browser only.</p>')
+    :'<p class="note">Pick up to three players you think will finish with the most shots on target.</p>';
+  box.innerHTML=yours+'<h2>'+esc(names[lg]||lg)+'<small>season '+esc(d.season)+', model projection</small></h2>'+
+    '<div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th><th class="n">So far</th>'+
+    '<th class="n">Projected</th><th class="n"></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  box.querySelectorAll(".pick").forEach(function(b){b.onclick=function(){
+    var id=b.dataset.id, cur=(picks[lg]||[]).slice(), i=cur.indexOf(id);
+    if(i>=0)cur.splice(i,1);else if(cur.length<3)cur.push(id);else return;
+    picks[lg]=cur;save(picks);draw()}});
+}
+draw();
+})();
+"""
+
+
+def call_page(fc: dict | None) -> str:
+    seasons = {lg: v for lg, v in (fc or {}).get("season", {}).items() if v["players"]}
+    body = f"""
+<section class="ph"><h1>Call your shot</h1>
+<div class="meta">Who finishes the season with the most shots on target?</div></section>
+<p class="note">Choose up to three players per competition. Your picks are saved in this browser only, nothing is
+sent anywhere, and you can come back to see how the season is going against the model's projection.</p>
+<select id="call-lg" aria-label="Competition"></select>
+<div id="call" data-seasons='{escape(json.dumps(seasons, separators=(",", ":")), quote=True)}'
+ data-names='{escape(json.dumps(LEAGUE_NAMES), quote=True)}'></div>
+<script>{CALL_JS}</script>"""
+    return page(f"Call your shot | {SITE_NAME}", body,
+                "Pick who will finish the season with the most shots on target and compare with the model.",
+                "call.html", "og-home.png")
+
+
+def _box(x, y, w, t1, t2):
+    return (f'<rect x="{x}" y="{y}" width="{w}" height="64" rx="10" style="fill:var(--panel);stroke:var(--line)"/>'
+            f'<text x="{x + w / 2}" y="{y + 28}" text-anchor="middle" font-weight="700" style="fill:var(--text)">{t1}</text>'
+            f'<text x="{x + w / 2}" y="{y + 48}" text-anchor="middle" font-size="12" style="fill:var(--muted)">{t2}</text>')
+
+
+def how_page(model: dict, stamp: str) -> str:
+    cov = [v["cov"] for v in model["leagues"].values()]
+    total, ok = sum(c["matches"] for c in cov), sum(c["ok"] for c in cov)
+    arrow = ('<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" '
+             'orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker></defs>')
+    line = lambda x1, y1, x2, y2: (f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" style="stroke:var(--muted)" '  # noqa: E731
+                                   f'stroke-width="1.5" marker-end="url(#ah)"/>')
+    svg = (f'<svg viewBox="0 0 820 250" role="img" aria-label="Pipeline: ESPN to parser to S3 to forecast and site" '
+           f'style="width:100%;height:auto;font-family:inherit">{arrow}'
+           + _box(10, 20, 150, "ESPN", "match endpoints") + _box(200, 20, 170, "Backfill job", "parse + reconcile")
+           + _box(410, 20, 150, "Amazon S3", "one JSON per match") + _box(600, 20, 210, "Forecast job", "backtest + save forecasts")
+           + _box(410, 150, 150, "Site build", "pages + preview images") + _box(600, 150, 210, "GitHub Pages", "this website")
+           + _box(10, 150, 360, "Live job (every 15 min)", "scores file, read by the Live page")
+           + line(160, 52, 198, 52) + line(370, 52, 408, 52) + line(560, 52, 598, 52)
+           + line(485, 84, 485, 148) + line(560, 182, 598, 182) + '</svg>')
+    body = f"""
+<section class="ph"><h1>How it is built</h1><div class="meta">Last build {escape(stamp)} UTC</div></section>
+{svg}
+<h2>The pieces</h2>
+<ul class="plain">
+<li><b>Collect.</b> A scheduled GitHub Actions job asks ESPN for finished matches, parses the commentary into one
+row per shot, and writes one small JSON file per match to Amazon S3. It resumes where it stopped and never downloads
+a finished match twice. Every night it catches up on the last few days for every competition.</li>
+<li><b>Check.</b> Each match is reconciled against ESPN's own totals. Right now {ok:,} of {total:,} stored matches
+({100 * ok / total:.1f}%) agree exactly; the rest stay flagged and are retried, not hidden.</li>
+<li><b>Forecast.</b> After the nightly run, a job rebuilds features from past matches only, trains Poisson models,
+tests them on newer matches, saves the forecasts, and later grades them. See <a href="forecast.html">Forecast</a>.</li>
+<li><b>Publish.</b> The site is plain HTML generated from the stored files, so there is no server or database to
+run. A finished match shows up without anyone touching anything.</li>
+<li><b>Live.</b> A separate job refreshes near-live scores every 15 minutes and publishes one tiny file.</li>
+</ul>
+<h2>Choices worth knowing</h2>
+<ul class="plain">
+<li>Storage holds parsed results, not raw ESPN responses, which keeps it small and cheap.</li>
+<li>Players are keyed by ESPN athlete id so same-name players never merge.</li>
+<li>Forecasts are saved before matches and graded after, so the scorecard cannot be rewritten with hindsight.</li>
+<li>Everything runs on free tiers plus a few cents of S3 storage.</li>
+</ul>
+<p class="note">Code, tests and design notes: <a href="{REPO_URL}">GitHub repository</a>.
+Built by {OWNER}.</p>"""
+    return page(f"How it is built | {SITE_NAME}", body, "Architecture and data-quality notes for Shotcast.",
+                "how.html", "og-home.png")
+
+
+def best_board(rows: list[dict], key: str, linked: set, n: int = 10) -> str:
+    pool = [r for r in rows if r.get(key) is not None]
+    pool.sort(key=lambda r: (-r[key], -r["shots"], r["player"]))
+    pool = pool[:n]
+    if not pool:
+        return (f'<p class="note">Not enough minutes data yet. This board needs players with at least '
+                f'{MIN_MINUTES_BEST:,} minutes across matches that have stored lineups.</p>')
+    top_v = pool[0][key] or 1
+    out = []
+    for i, r in enumerate(pool, 1):
+        lg = r["best_league"]
+        name = escape(r["player"])
+        if (lg, r["best_pid"]) in linked:
+            name = f'<a href="{player_url(lg, r["best_pid"])}">{name}</a>'
+        comps = ", ".join(lname(k) for k, _ in sorted(r["leagues"].items(), key=lambda kv: -kv[1])[:3])
+        val = f"{r[key]:.2f}" if isinstance(r[key], float) else f"{r[key]:,}"
+        out.append(f"<tr><td class='rk'>{i}</td><td class='who'>{name}<small>{escape(r['team'])} · "
+                   f"{escape(comps)}</small></td><td class='n opt'>{r['minutes']:,}</td>"
+                   f"<td class='n'>{r['shots_on_target']:,}</td><td class='n'>{r['goals']:,}</td>"
+                   f"<td class='n hl'><i style='--w:{100 * r[key] / top_v:.0f}%'></i><b>{val}</b></td></tr>")
+    return ('<div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th>'
+            '<th class="n opt">Min</th><th class="n">On target</th><th class="n">Goals</th>'
+            f'<th class="n">{"Per 90" if key == "sot90" else "Ranked by"}</th></tr></thead>'
+            f'<tbody>{"".join(out)}</tbody></table></div>')
+
+
+def best_page(rows: list[dict], linked: set, span: str) -> str:
+    tabs = "".join(f'<button data-tab="b-{tid}" aria-pressed="{str(i == 0).lower()}">{label}</button>'
+                   for i, (tid, label, _) in enumerate(BEST_TABS))
+    panels = "".join(f'<div class="panel" id="b-{tid}"{"" if i == 0 else " hidden"}>'
+                     f'{best_board(rows, key, linked)}</div>' for i, (tid, _, key) in enumerate(BEST_TABS))
+    body = f"""
+<section class="ph"><h1>Best of the best</h1>
+<div class="meta">Top 10 across every competition stored · {escape(span)}</div></section>
+<div class="tabs">{tabs}</div>{panels}
+<p class="note">Each player is counted once, with matches added up across all competitions (league, Champions
+League, World Cup and so on) using ESPN's player id. These numbers are not adjusted for league strength, minutes
+played or team style, so a striker in a weaker league is not directly comparable to one in a stronger league.
+Per-90 needs at least {MIN_MINUTES_BEST:,} known minutes. Rankings cover only the matches stored on this site.</p>"""
+    return page(f"Best of the best | {SITE_NAME}", body,
+                "Top 10 players by shots on target, goals and shots on target per 90 across every stored competition.",
+                "best.html", "og-home.png")
 
 
 def method_page(model: dict, stamp: str) -> str:
@@ -477,8 +827,8 @@ differ from other data providers.</li>
 <li>Minutes and appearances exist only for matches stored with a lineup; players without one show "-".</li>
 <li>Shot locations come in two ESPN formats (0-100 with the goal at 100, and 0-1 with the goal at 0). The shot
 maps detect the format for each match. Some shots have no location and are not drawn.</li>
-<li>There is no combined ranking across competitions: leagues differ in strength and schedule, so it would not be
-a fair comparison.</li>
+<li>The "Best of the best" page adds a player's matches across competitions without adjusting for league strength,
+so treat it as a count, not a verdict on quality.</li>
 <li>No expected-goals ranking is published. An estimate exists, but it has not been validated against independent
 data, and ESPN's coordinate formats make that check necessary first.</li>
 </ul>
@@ -495,11 +845,19 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
     if not coverage:
         raise SystemExit("No matches stored yet: nothing to build.")
     model = build_model(recs, players, coverage)
+    fcs = load_forecasts(store)
+    latest_fc = fcs[-1] if fcs else None
+    sc = scorecard(fcs, recs)
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M")
     files: dict[str, str] = {"style.css": CSS, "app.js": JS, ".nojekyll": "",
                              "index.html": index_page(model, len(players), stamp),
-                             "method.html": method_page(model, stamp)}
+                             "method.html": method_page(model, stamp), "about.html": about_page(), "live.html": live_page(), "how.html": how_page(model, stamp),
+                             "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc)}
     search = []
+    linked_all = {(lg, pid) for lg, v in model["leagues"].items() for pid in featured_ids(v["rows"])}
+    allrows = combined_rows(players)
+    spans = [c["first"] for c in coverage.values() if c.get("first")] + [c["last"] for c in coverage.values() if c.get("last")]
+    files["best.html"] = best_page(allrows, linked_all, f"{min(spans)} to {max(spans)}" if spans else "")
     for lg, v in model["leagues"].items():
         linked = featured_ids(v["rows"])
         files[f"{lg}.html"] = league_page(lg, v, linked, top_n)
@@ -507,7 +865,7 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
                  "goals": rank_map(v["rows"], ("goals", "shots_on_target")), "size": len(v["rows"])}
         for r in v["rows"]:
             if r["pid"] in linked:
-                files[player_url(lg, r["pid"])] = player_page(lg, r, model["shots"].get((lg, r["pid"]), []), ranks)
+                files[player_url(lg, r["pid"])] = player_page(lg, r, model["shots"].get((lg, r["pid"]), []), ranks, card=cards.available())
             search.append({"player": r["player"], "team": r["team"], "league": lg, "league_name": lname(lg),
                            "url": player_url(lg, r["pid"]) if r["pid"] in linked else "",
                            "rank": ranks["sot"][r["pid"]], "field": len(v["rows"]), "shots": r["shots"],
@@ -523,7 +881,34 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
         path = out / name
         path.write_text(text, encoding="utf-8")
         paths.append(path)
+    if cards.available():
+        paths += preview_images(out, model, players, coverage, allrows)
     return paths
+
+
+def preview_images(out: Path, model: dict, players: dict, coverage: dict, allrows: list[dict]) -> list[Path]:
+    """The 1200x630 pictures that LinkedIn and other sites show when a link is shared."""
+    total = sum(c["matches"] for c in coverage.values())
+    made = [cards.render_card(out / "og-home.png", "Soccer shots, shown and forecast",
+                              f"{len(coverage)} competitions · {len(players):,} players",
+                              [(f"{total:,}", "matches"), (f"{len(coverage)}", "competitions"),
+                               (f"{len(players):,}", "players")])]
+    for lg, v in model["leagues"].items():
+        top = sorted(v["rows"], key=lambda r: (-r["shots_on_target"], r["player"]))[:1]
+        sub = f"Most on target: {top[0]['player']} ({top[0]['shots_on_target']})" if top else ""
+        made.append(cards.render_card(out / f"og-{lg}.png", lname(lg), sub,
+                                      [(f"{v['cov']['matches']:,}", "matches"),
+                                       (f"{len(v['rows']):,}", "players")]))
+    for lg, v in model["leagues"].items():
+        for r in v["rows"]:
+            url = player_url(lg, r["pid"])
+            if (out / url).exists():
+                shots = [{"x": s["x"], "y": s["y"], "o": s["o"]} for s in model["shots"].get((lg, r["pid"]), [])]
+                made.append(cards.render_card(out / ("og-" + url.replace(".html", ".png")), r["player"],
+                                              f"{r['team']} · {lname(lg)}",
+                                              [(f"{r['shots_on_target']}", "on target"), (f"{r['goals']}", "goals"),
+                                               (f"{r['shots']}", "shots")], shots))
+    return made
 
 
 def main(argv=None) -> int:

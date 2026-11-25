@@ -83,3 +83,51 @@ def test_per90_uses_only_matches_with_known_minutes(tmp_path):
 def test_build_refuses_an_empty_store(tmp_path):
     with pytest.raises(SystemExit):
         site.build(LocalStore(tmp_path / "empty"), tmp_path / "site")
+
+
+def test_combined_rows_merge_by_athlete_id_only():
+    from pitchline.leaderboard import totals_from_records
+    from pitchline.sitedata import combined_rows
+
+    def rec(lg, eid, pl, lineup):
+        return {"league": lg, "event_id": eid, "date": "2025-09-01", "coverage": "ok", "players": pl,
+                "lineup": lineup, "shots": [], "teams": []}
+
+    def mins(aid, name, m):
+        return [{"team": "A", "athlete_id": aid, "player": name, "minutes": m}]
+    recs = [rec("eng.1", "1", [_p("A", "Sam", 4, 2, aid="7")], mins("7", "Sam", 90)),
+            rec("uefa.champions", "2", [_p("A", "Sam", 3, 3, aid="7")], mins("7", "Sam", 90)),
+            rec("eng.1", "3", [_p("C", "Sam", 1, 1, aid="8")], mins("8", "Sam", 90)),   # a different Sam
+            rec("eng.1", "4", [_p("B", "Sam", 9, 9)], []),     # old layout, name is ambiguous: stays separate
+            ]
+    players, _ = totals_from_records(recs)
+    rows = combined_rows(players)
+    sam = next(r for r in rows if r["athlete_id"] == "7")
+    assert sam["shots_on_target"] == 5 and sam["minutes"] == 180 and set(sam["leagues"]) == {"eng.1", "uefa.champions"}
+    assert sam["sot90"] is None                                                 # under the minutes rule
+    assert len(rows) == 3                                                       # id 7, id 8, and the name-only row
+
+
+def test_build_includes_new_pages_and_links(tmp_path):
+    import json
+
+    from pitchline.site import build
+    from pitchline.storage import LocalStore
+    store = LocalStore(tmp_path / "s")
+    for i in range(3):
+        _put(store, "eng.1", str(i), f"2025-09-0{i + 1}", [_p("A", "Sam", 4, 2, aid="7")],
+             lineup=[{"team": "A", "athlete_id": "7", "player": "Sam", "minutes": 90}])
+    store.write_bytes("forecasts/x.json", json.dumps({
+        "asof": "2025-09-05T00:00:00Z", "model": {"status": "baseline only", "reason": "needs more data"},
+        "matchday": [], "season": {"eng.1": {"season": 2025, "games": 38, "players": [
+            {"athlete_id": "7", "player": "Sam <b>", "team": "A", "so_far": 6, "per_match": .5, "left": 30,
+             "proj": 21.0, "lo": 14, "hi": 28}]}}}).encode())
+    out = tmp_path / "site"
+    build(store, out)
+    for name in ("best.html", "about.html", "live.html", "forecast.html", "call.html"):
+        assert (out / name).exists(), name
+    fc = (out / "forecast.html").read_text()
+    assert "baseline only" in fc and "Sam &lt;b&gt;" in fc and "Sam <b>" not in fc
+    assert "&lt;b&gt;" in (out / "call.html").read_text() or "Sam &lt;b&gt;" in (out / "call.html").read_text()
+    home = (out / "index.html").read_text()
+    assert "Built by" in home and "Amir Mirkazemi" in home and 'href="best.html"' in home
