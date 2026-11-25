@@ -2,3 +2,5 @@
 pytest>=8
 moto[s3]>=5
 ruff>=0.5
+scikit-learn>=1.4
+pillow>=10
