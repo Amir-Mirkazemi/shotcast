@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 from .storage import Store, get_store
 
@@ -21,19 +22,29 @@ PREFIX = "espn/matches/"
 def _new_row(lg: str, name: str, team: str, athlete_id: str = "") -> dict:
     return {"league": lg, "player": name, "team": team, "athlete_id": athlete_id, "matches": 0,
             "shots": 0, "shots_on_target": 0, "goals": 0, "assists": 0, "apps": 0, "minutes": 0,
-            "lineup_matches": 0}
+            "lineup_matches": 0,
+            # the same stats, but only over matches where the player's minutes are known (for per-90 rates)
+            "lc_shots": 0, "lc_sot": 0, "lc_goals": 0, "lc_assists": 0}
+
+
+def read_records(store: Store, league: str | None = None, workers: int = 16) -> list[dict]:
+    """Every stored match file, oldest first. Reads in parallel because S3 reads are slow one at a time."""
+    prefix = PREFIX + (f"{league}/" if league else "")
+    keys = [k for k in store.list_keys(prefix) if k.endswith(".json")]
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        recs = list(pool.map(lambda k: json.loads(store.read_bytes(k)), keys))
+    recs.sort(key=lambda r: r.get("date") or "")          # oldest first, so "team" ends as the latest
+    return recs
 
 
 def load_totals(store: Store, league: str | None = None) -> tuple[dict, dict]:
     """Return (players, coverage). players[(league, athlete id or name)] -> running totals."""
+    return totals_from_records(read_records(store, league))
+
+
+def totals_from_records(recs: list[dict]) -> tuple[dict, dict]:
     coverage: dict[str, dict] = defaultdict(
         lambda: {"matches": 0, "ok": 0, "with_lineup": 0, "first": None, "last": None})
-    prefix = PREFIX + (f"{league}/" if league else "")
-    recs = []
-    for key in store.list_keys(prefix):
-        if key.endswith(".json"):
-            recs.append(json.loads(store.read_bytes(key)))
-    recs.sort(key=lambda r: r.get("date") or "")          # oldest first, so "team" ends as the latest
     # Matches stored before athlete ids existed are linked by name, but only when the name maps to one id.
     ids_by_name: dict[tuple[str, str], set[str]] = defaultdict(set)
     for rec in recs:
@@ -54,17 +65,23 @@ def load_totals(store: Store, league: str | None = None) -> tuple[dict, dict]:
         cov["matches"] += 1
         cov["ok"] += rec.get("coverage") == "ok"
         cov["with_lineup"] += bool(rec.get("lineup"))
-        d = rec.get("date")
+        d = (rec.get("date") or "")[:10]
         if d:
             cov["first"] = min(cov["first"] or d, d)
             cov["last"] = max(cov["last"] or d, d)
+        in_lineup = {pid(lg, p) for p in rec.get("lineup", [])}
         for p in rec.get("players", []):
-            row = players.setdefault((lg, pid(lg, p)),
+            who = pid(lg, p)
+            row = players.setdefault((lg, who),
                                      _new_row(lg, p["player"], p["team"], p.get("athlete_id", "")))
             row["team"] = p["team"]
             row["matches"] += 1
             for k in ("shots", "shots_on_target", "goals", "assists"):
                 row[k] += int(p.get(k) or 0)
+            if who in in_lineup:
+                for k, lk in (("shots", "lc_shots"), ("shots_on_target", "lc_sot"),
+                              ("goals", "lc_goals"), ("assists", "lc_assists")):
+                    row[lk] += int(p.get(k) or 0)
         for p in rec.get("lineup", []):
             row = players.setdefault((lg, pid(lg, p)),
                                      _new_row(lg, p["player"], p["team"], p.get("athlete_id", "")))

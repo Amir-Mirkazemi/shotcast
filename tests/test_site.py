@@ -1,12 +1,16 @@
 import json
 
+import pytest
+
 from pitchline import site
+from pitchline.sitedata import pitch_coords, rank_map, slug
 from pitchline.storage import LocalStore
 
 
-def _put(store, league, eid, date, players, coverage="ok", lineup=None):
+def _put(store, league, eid, date, players, coverage="ok", lineup=None, shots=None, teams=None):
     rec = {"league": league, "event_id": eid, "date": date, "coverage": coverage, "players": players,
-           "lineup": lineup or []}
+           "lineup": lineup or [], "shots": shots or [],
+           "teams": teams or [{"name": "A", "home": True, "score": "2"}, {"name": "B", "home": False, "score": "1"}]}
     store.write_bytes(f"espn/matches/{league}/{eid}.json", json.dumps(rec).encode())
 
 
@@ -15,32 +19,67 @@ def _p(team, name, shots, sot, goals=0, assists=0, aid=""):
             "goals": goals, "assists": assists, "own_goals": 0}
 
 
-def test_build_writes_pages_escapes_names_and_lists_every_league(tmp_path):
+def _shot(player, x, y, outcome="saved", body="right_foot", situation="open_play", sec=600):
+    return {"player": player, "x": x, "y": y, "outcome": outcome, "body_part": body, "situation": situation,
+            "seconds": sec, "on_target": outcome in ("saved", "goal")}
+
+
+def test_pitch_coords_handles_both_espn_schemes_and_missing_locations():
+    old = pitch_coords([_shot("a", 88.0, 40.0), _shot("a", 75.0, 60.0)])       # 0-100, goal at 100
+    assert old[0] == (88.0, 40.0)
+    new = pitch_coords([_shot("a", 0.12, 0.50), _shot("a", 0.30, 0.70), _shot("a", 0.0, 0.0)])  # 0-1, goal at 0
+    assert new[0] == pytest.approx((88.0, 50.0)) and new[1] == pytest.approx((70.0, 70.0))
+    assert new[2] is None                                                         # (0, 0) means "no location"
+    assert pitch_coords([{"x": None, "y": None}]) == [None]
+
+
+def test_slug_and_rank_map_ties():
+    assert slug("Atlético Madrid") == "atletico-madrid" and slug("???") == "x"
+    rows = [{"pid": "a", "k": 5}, {"pid": "b", "k": 5}, {"pid": "c", "k": 3}]
+    assert rank_map(rows, ("k",)) == {"a": 1, "b": 1, "c": 3}
+
+
+def test_build_writes_every_page_type_escapes_names_and_maps_shots(tmp_path):
     s = LocalStore(tmp_path / "data")
-    _put(s, "eng.1", "1", "2025-08-16",
-         [_p("A", "Erling <b>Haaland</b>", 4, 3, goals=1, aid="1"), _p("B", "José Ñ", 5, 1, aid="2")],
-         lineup=[{"team": "A", "athlete_id": "1", "player": "Erling <b>Haaland</b>", "minutes": 90}])
-    _put(s, "esp.1", "9", "2025-08-17", [_p("C", "Zed", 9, 9, aid="3")], coverage="mismatch")
+    star = "Erling <b>Haaland</b>"
+    _put(s, "eng.1", "1", "2025-08-16T14:00Z",
+         [_p("A", star, 4, 3, goals=1, aid="1"), _p("B", "José Ñ", 5, 1, aid="2")],
+         lineup=[{"team": "A", "athlete_id": "1", "player": star, "minutes": 90}],
+         shots=[_shot(star, 0.1, 0.5, outcome="goal"), _shot(star, 0.0, 0.0)])
+    _put(s, "esp.1", "9", "2025-08-17T14:00Z", [_p("C", "Zed", 9, 9, aid="3")], coverage="mismatch")
     out = tmp_path / "site"
-    site.build(s, out, top_n=10)
+    site.build(s, out)
     names = {p.name for p in out.iterdir()}
-    assert {"index.html", "method.html", "eng.1.html", "esp.1.html", "players.json", "style.css",
-            "app.js", ".nojekyll"} <= names
-    index = (out / "index.html").read_text()
-    assert "Premier League" in index and "La Liga" in index
+    assert {"index.html", "method.html", "eng.1.html", "esp.1.html", "players.json", "style.css", "app.js",
+            ".nojekyll", "p-eng.1-1.html", "t-eng.1-a.html", "t-eng.1-b.html"} <= names
+    assert "Premier League" in (out / "index.html").read_text()
     league = (out / "eng.1.html").read_text()
-    assert "<b>Haaland" not in league and "&lt;b&gt;Haaland" in league       # names are escaped
-    assert "José Ñ" in league
+    assert "<b>Haaland" not in league and "&lt;b&gt;Haaland" in league and "José Ñ" in league
+    assert "2025-08-16T" not in league and "2025-08-16 to 2025-08-16" in league   # dates, not timestamps
+    player = (out / "p-eng.1-1.html").read_text()
+    assert "<svg" in player and "s-goal" in player and "1 of 2 parsed shots" in player
+    assert "<b>Haaland" not in player
     data = json.loads((out / "players.json").read_text())
-    haaland = next(p for p in data if p["player"].startswith("Erling"))
-    assert haaland["rank"] == 1 and haaland["field"] == 2 and haaland["minutes"] == 90
-    jose = next(p for p in data if p["player"] == "José Ñ")
-    assert jose["minutes"] == "-" and jose["rank"] == 2                        # no lineup stored: shown as "-"
-    method = (out / "method.html").read_text()
-    assert "50.0%" in method or "100.0%" in method                            # reconcile rate per league
+    star_row = next(p for p in data if p["player"] == star)
+    assert star_row["url"] == "p-eng.1-1.html" and star_row["rank"] == 1 and star_row["field"] == 2
+    assert "50.0%" in (out / "method.html").read_text() or "100.0%" in (out / "method.html").read_text()
+
+
+def test_per90_uses_only_matches_with_known_minutes(tmp_path):
+    from pitchline.leaderboard import read_records, totals_from_records
+    from pitchline.sitedata import build_model
+    s = LocalStore(tmp_path)
+    for i in range(10):                      # ten matches with a lineup: 900 minutes, 10 shots on target
+        _put(s, "eng.1", str(i), f"2025-09-{i + 1:02d}", [_p("A", "X", 2, 1, aid="1")],
+             lineup=[{"team": "A", "athlete_id": "1", "player": "X", "minutes": 90}])
+    _put(s, "eng.1", "99", "2025-10-01", [_p("A", "X", 30, 30, aid="1")])         # no lineup: must not inflate
+    recs = read_records(s)
+    players, cov = totals_from_records(recs)
+    row = build_model(recs, players, cov)["leagues"]["eng.1"]["rows"][0]
+    assert row["shots_on_target"] == 40 and row["minutes"] == 900
+    assert row["sot90"] == pytest.approx(1.0)
 
 
 def test_build_refuses_an_empty_store(tmp_path):
-    import pytest
     with pytest.raises(SystemExit):
         site.build(LocalStore(tmp_path / "empty"), tmp_path / "site")

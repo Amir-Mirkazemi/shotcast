@@ -123,9 +123,11 @@ before publishing analysis built on it; it requires crediting StatsBomb as the s
 Pitchline is being extended from a one-tournament demo into a multi-league pipeline that tracks
 player shot and chance creation totals across years and updates as matches finish.
 
-**Live site:** https://amir-mirkazemi.github.io/pitchline-live/ (per-competition leaderboards for shots on
-target, goals and assists, player search, and a data-quality page; rebuilt automatically from the stored
-matches by `.github/workflows/site.yml`, code in `src/pitchline/site.py`).
+**Live site (Far Post):** https://amir-mirkazemi.github.io/pitchline-live/ (per-competition leaderboards for
+shots on target, goals, assists and on-target-per-90, team pages, player pages with shot maps, player search,
+and a data-quality page; rebuilt automatically from the stored matches by `.github/workflows/site.yml`,
+code in `src/pitchline/site.py`). ESPN reports shot locations in two different coordinate formats; the
+shot maps detect the format per match.
 
 **Built and tested**
 - ESPN commentary parser: one row per shot with location (when ESPN provides it), body part, situation,
