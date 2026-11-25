@@ -22,7 +22,7 @@ def test_totals_accumulate_across_matches_and_rank_by_shots_on_target(tmp_path):
     x = players[("eng.1", "X")]
     assert (x["matches"], x["shots"], x["shots_on_target"], x["goals"], x["assists"]) == (2, 6, 5, 1, 1)
     assert [r["player"] for r in lb.top(players, "eng.1")] == ["X", "Y"]
-    assert cov["eng.1"] == {"matches": 2, "ok": 1, "with_lineup": 0}
+    assert cov["eng.1"] == {"matches": 2, "ok": 1, "with_lineup": 0, "first": "2025-08-16", "last": "2025-08-23"}
 
 
 def test_ties_break_on_shots_then_name_and_leagues_stay_separate(tmp_path):

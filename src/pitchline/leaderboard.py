@@ -26,7 +26,8 @@ def _new_row(lg: str, name: str, team: str, athlete_id: str = "") -> dict:
 
 def load_totals(store: Store, league: str | None = None) -> tuple[dict, dict]:
     """Return (players, coverage). players[(league, athlete id or name)] -> running totals."""
-    coverage: dict[str, dict] = defaultdict(lambda: {"matches": 0, "ok": 0, "with_lineup": 0})
+    coverage: dict[str, dict] = defaultdict(
+        lambda: {"matches": 0, "ok": 0, "with_lineup": 0, "first": None, "last": None})
     prefix = PREFIX + (f"{league}/" if league else "")
     recs = []
     for key in store.list_keys(prefix):
@@ -53,6 +54,10 @@ def load_totals(store: Store, league: str | None = None) -> tuple[dict, dict]:
         cov["matches"] += 1
         cov["ok"] += rec.get("coverage") == "ok"
         cov["with_lineup"] += bool(rec.get("lineup"))
+        d = rec.get("date")
+        if d:
+            cov["first"] = min(cov["first"] or d, d)
+            cov["last"] = max(cov["last"] or d, d)
         for p in rec.get("players", []):
             row = players.setdefault((lg, pid(lg, p)),
                                      _new_row(lg, p["player"], p["team"], p.get("athlete_id", "")))

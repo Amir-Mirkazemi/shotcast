@@ -123,6 +123,10 @@ before publishing analysis built on it; it requires crediting StatsBomb as the s
 Pitchline is being extended from a one-tournament demo into a multi-league pipeline that tracks
 player shot and chance creation totals across years and updates as matches finish.
 
+**Live site:** https://amir-mirkazemi.github.io/pitchline-live/ (per-competition leaderboards for shots on
+target, goals and assists, player search, and a data-quality page; rebuilt automatically from the stored
+matches by `.github/workflows/site.yml`, code in `src/pitchline/site.py`).
+
 **Built and tested**
 - ESPN commentary parser: one row per shot with location (when ESPN provides it), body part, situation,
   assister. Each match is reconciled against ESPN's own boxscore total shots and flagged `ok` or
@@ -138,11 +142,15 @@ player shot and chance creation totals across years and updates as matches finis
   ESPN's per-player roster stats, not the commentary.
 - xG estimator calibrated to StatsBomb xG, validated leave-one-competition-out
   (competition totals within about 3%, about 0.04 error per shot).
+- Player identity by ESPN athlete id (two players with the same name stay separate) and minutes played
+  from stored lineups, with a re-download mode (`--upgrade`) that adds both to older matches.
+- Static website generated from the stored matches (competition leaderboards, player search, method and
+  data-quality page) and deployed with GitHub Pages.
 - Resumable, rate-limit-aware backfills (ESPN, and API-Football for the Saudi Pro League)
   that run on a schedule in GitHub Actions and write to S3.
 
 **Not built yet**
-- Running per-player totals in dbt, the new leaderboards, and the live poller.
+- Running per-player totals in dbt, the "Danger" ranking, and the live poller.
 - Validation of ESPN coordinates against StatsBomb on the *same* matches.
 
 **Data notes**
