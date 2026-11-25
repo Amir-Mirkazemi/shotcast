@@ -35,20 +35,30 @@ def parse_event(league: str, e: dict) -> dict | None:
         return None
 
 
+def day_events(fetch, league: str, start, days: int, sleep=time.sleep) -> list[dict]:
+    """Scoreboard events for `days` single days from `start`. ESPN rejects multi-day ranges for current dates,
+    so each day is its own request; events are de-duplicated by id."""
+    seen: dict[str, dict] = {}
+    for i in range(days):
+        data, _ = fetch(f"{BASE}/{league}/scoreboard?dates={start + timedelta(days=i):%Y%m%d}&limit=300")
+        for e in data.get("events", []):
+            seen[str(e.get("id"))] = e
+        sleep(0.3)
+    return list(seen.values())
+
+
 def collect(fetch=get_json, now: datetime | None = None, leagues=LEAGUES, sleep=time.sleep) -> dict:
     """Yesterday, today and tomorrow (UTC) per competition. A failing competition is listed, not fatal."""
     now = now or datetime.now(timezone.utc)
-    qs = f"{now - timedelta(days=1):%Y%m%d}-{now + timedelta(days=1):%Y%m%d}"
     matches, failed = [], []
     for lg in leagues:
         try:
-            data, _ = fetch(f"{BASE}/{lg}/scoreboard?dates={qs}&limit=300")
+            events = day_events(fetch, lg, (now - timedelta(days=1)).date(), 3, sleep)
         except Exception as err:   # noqa: BLE001 - one broken endpoint must not blank the whole page
             log.warning("%s failed: %s", lg, err)
             failed.append(lg)
             continue
-        matches += [m for e in data.get("events", []) if (m := parse_event(lg, e))]
-        sleep(0.5)
+        matches += [m for e in events if (m := parse_event(lg, e))]
     matches.sort(key=lambda m: (m["state"] != "in", m["kickoff"]))
     return {"updated": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "failed": failed, "matches": matches}
 

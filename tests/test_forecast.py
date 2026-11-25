@@ -78,7 +78,7 @@ def test_matchday_forecast_and_scorecard_round_trip():
               "competitions": [{"competitors": [{"homeAway": "home", "team": {"displayName": TEAMS[0]}},
                                                 {"homeAway": "away", "team": {"displayName": TEAMS[1]}}]}]}
         return ({"events": [ev]} if "eng.1" in url else {"events": []}), {}
-    fc = make_forecast(recs, fetch, now)
+    fc = make_forecast(recs, fetch, now, sleep=lambda s: None)
     assert fc["matchday"] and all(p["event_id"] == "9001" for p in fc["matchday"])
     assert {p["team"] for p in fc["matchday"]} == {TEAMS[0], TEAMS[1]}
     assert fc["season"]["eng.1"]["players"]

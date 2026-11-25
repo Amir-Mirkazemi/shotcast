@@ -16,13 +16,13 @@ import argparse
 import json
 import logging
 from collections import defaultdict, deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import numpy as np
 
 from .espn_shots import _norm
 from .leaderboard import read_records
-from .live import BASE, LEAGUES
+from .live import LEAGUES, day_events
 from .storage import Store, get_store
 
 log = logging.getLogger("pitchline.forecast")
@@ -193,16 +193,16 @@ def predict(model, f: list[float]) -> float:
     return baseline(f) if model is None else float(max(model.predict(np.array([f]))[0], 1e-3))
 
 
-def upcoming(fetch, now: datetime, leagues=LEAGUES, days: int = 7) -> list[dict]:
-    qs = f"{now:%Y%m%d}-{now + timedelta(days=days):%Y%m%d}"
+def upcoming(fetch, now: datetime, leagues=LEAGUES, days: int = 7, sleep=None) -> list[dict]:
+    import time
     out = []
     for lg in leagues:
         try:
-            data, _ = fetch(f"{BASE}/{lg}/scoreboard?dates={qs}&limit=300")
+            events = day_events(fetch, lg, now.date(), days, sleep or time.sleep)
         except Exception as err:   # noqa: BLE001 - a broken competition should not stop the others
             log.warning("fixtures for %s failed: %s", lg, err)
             continue
-        for e in data.get("events", []):
+        for e in events:
             try:
                 if e["status"]["type"]["state"] != "pre":
                     continue
@@ -286,12 +286,12 @@ def season_projection(recs: list[dict], st: State, model, top: int = 25) -> dict
     return out
 
 
-def make_forecast(recs: list[dict], fetch, now: datetime | None = None) -> dict:
+def make_forecast(recs: list[dict], fetch, now: datetime | None = None, sleep=None) -> dict:
     now = now or datetime.now(timezone.utc)
     rows, st = replay(recs)
     model, card = train_and_backtest(rows)
     return {"asof": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "model": card,
-            "matchday": matchday_forecast(st, model, upcoming(fetch, now)),
+            "matchday": matchday_forecast(st, model, upcoming(fetch, now, sleep=sleep)),
             "season": season_projection(recs, st, model)}
 
 
