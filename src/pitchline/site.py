@@ -238,6 +238,105 @@ FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox
 def lname(slug_: str) -> str:
     return LEAGUE_NAMES.get(slug_, slug_)
 
+CSS += """
+/* ---- design pass: type, stage, motion ---- */
+body { font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg);
+  overflow-x:clip; -webkit-font-smoothing:antialiased; }
+h1,h2,.brand,.big b,.herostat b,.skpi b,.kpi b,.card h3 { font-family:"Bricolage Grotesque",Inter,system-ui,sans-serif; }
+h2 { font-size:1.6rem; margin:56px 0 16px; letter-spacing:-.02em; font-weight:700; }
+h2 small { font-family:Inter,system-ui,sans-serif; letter-spacing:0; }
+.top { background:color-mix(in srgb, var(--panel) 82%, transparent); backdrop-filter:saturate(1.4) blur(10px); }
+.card:hover { transform:none; }
+.card, .note-card, .wcard, .kpi, .pitch { box-shadow:none; }
+.stage { --pitch:#133a27; --pline:#31694b; --panel:#0a1711; --accent:#ffd23f; --text:#eef3ea; --muted:#9db7a8;
+  --line:#26453a; --blue:#5cc8ff; --red:#ff7a7a; --grey:#8aa196;
+  position:relative; width:100vw; margin-left:calc(50% - 50vw); margin-top:0; color:var(--text);
+  background:radial-gradient(900px 480px at 78% 40%, #174a31 0%, transparent 70%), #0a1711; padding:64px 0 56px; }
+.stage-in { max-width:1040px; margin:0 auto; padding:0 18px; display:grid; grid-template-columns:1fr 1.05fr;
+  gap:48px; align-items:center; }
+.stage h1 { font-size:clamp(2.6rem,6.4vw,4.8rem); line-height:.96; letter-spacing:-.035em; font-weight:800; margin:0 0 18px; }
+.stage p { color:var(--muted); font-size:1.08rem; max-width:34ch; margin:0 0 24px; }
+.stage .search { background:rgba(255,255,255,.06); border-color:var(--line); color:var(--text); max-width:420px; }
+.stage .search::placeholder { color:var(--muted); }
+.stage .search:focus { border-color:var(--accent); }
+.skpis { display:flex; gap:34px; margin-top:34px; flex-wrap:wrap; }
+.skpi b { display:block; font-size:2.4rem; line-height:1; font-weight:800; font-variant-numeric:tabular-nums; }
+.skpi span { color:var(--muted); font-size:.85rem; }
+.stage-map svg { width:100%; height:auto; display:block; filter:drop-shadow(0 18px 40px rgba(0,0,0,.45)); }
+.stage-map .turf { fill:#0f2e20; }
+.stage-cap { display:flex; align-items:center; gap:14px; margin-top:14px; flex-wrap:wrap; }
+.stage-cap a { display:flex; align-items:center; gap:10px; color:var(--text); text-decoration:none; }
+.stage-cap a > span:not(.av) { display:flex; flex-direction:column; font-size:.82rem; color:var(--muted); line-height:1.25; }
+.stage-cap a b { color:var(--text); font-size:.95rem; }
+.stage-cap .cnt { margin-left:auto; color:var(--muted); font-size:.85rem; }
+.stage-cap .cnt b { color:var(--accent); font-family:"Bricolage Grotesque",Inter,sans-serif; font-size:1.5rem; }
+.replay { background:none; border:1px solid var(--line); color:var(--text); border-radius:999px; padding:4px 14px;
+  font:inherit; font-size:.8rem; cursor:pointer; } .replay:hover { border-color:var(--accent); color:var(--accent); }
+.anim .dot { opacity:0; transform-box:fill-box; transform-origin:center;
+  animation:pop .45s cubic-bezier(.2,.9,.3,1.5) forwards; animation-delay:var(--d); }
+.anim .trail { fill:none; stroke:var(--grey); stroke-width:2; stroke-linecap:round; opacity:0;
+  stroke-dasharray:var(--len); stroke-dashoffset:var(--len); animation:fly .5s ease-out forwards; animation-delay:var(--d); }
+.anim .trail.g { stroke:var(--accent); stroke-width:3.5; }
+@keyframes pop { from { opacity:0; transform:scale(0); } to { opacity:.95; transform:scale(1); } }
+@keyframes fly { 0% { opacity:.9; stroke-dashoffset:var(--len); } 60% { opacity:.9; stroke-dashoffset:0; }
+  100% { opacity:0; stroke-dashoffset:0; } }
+.wcard { border-radius:16px; } .wcard:hover { transform:none; }
+.wcard .av, .phead .av { box-shadow:0 0 0 3px var(--panel), 0 0 0 5px hsl(var(--h) 52% 36%); }
+@media (max-width:820px) { .stage { padding:40px 0 36px; } .stage-in { grid-template-columns:1fr; gap:28px; }
+  .stage p { max-width:none; } .skpis { gap:24px; } .skpi b { font-size:1.9rem; } }
+@media (prefers-reduced-motion:reduce) { .anim .dot { animation:none; opacity:.95; } .anim .trail { display:none; } }
+"""
+
+JS += """
+(function () {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const NS = 'http://www.w3.org/2000/svg';
+  function play(svg, total) {
+    if (reduce) return;
+    svg.classList.remove('anim'); svg.querySelectorAll('.trail').forEach(t => t.remove());
+    const dots = [...svg.querySelectorAll('.dot')], first = dots[0];
+    if (!first) return;
+    const step = Math.min(0.06, total / dots.length);
+    dots.forEach((d, i) => {
+      const cx = +d.getAttribute('cx'), cy = +d.getAttribute('cy'), on = !/s-(off|blocked)/.test(d.getAttribute('class'));
+      const delay = (i * step).toFixed(2);
+      d.style.setProperty('--d', (+delay + 0.35) + 's');
+      if (on) {
+        const gx = 340, gy = -8, len = Math.hypot(gx - cx, gy - cy);
+        const ln = document.createElementNS(NS, 'path');
+        ln.setAttribute('d', 'M' + cx + ' ' + cy + ' L' + gx + ' ' + gy);
+        ln.setAttribute('class', 'trail' + (/s-goal/.test(d.getAttribute('class')) ? ' g' : ''));
+        ln.style.setProperty('--len', len); ln.style.setProperty('--d', delay + 's');
+        svg.insertBefore(ln, first);
+      }
+    });
+    void svg.getBoundingClientRect(); svg.classList.add('anim');
+  }
+  function count(el) {
+    const to = +el.dataset.count; if (reduce || !to) return;
+    const t0 = performance.now(), dur = 1400;
+    (function tick(t) {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(to * e).toLocaleString('en-US');
+      if (k < 1) requestAnimationFrame(tick);
+    })(t0);
+  }
+  const stage = document.getElementById('stage-map');
+  if (stage) {
+    const svg = stage.querySelector('svg'); play(svg, 3.4);
+    const rp = document.getElementById('replay'); if (rp) rp.addEventListener('click', () => play(svg, 3.4));
+  }
+  document.querySelectorAll('.stage [data-count]').forEach(count);
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(es => es.forEach(e => {
+      if (e.isIntersecting) { play(e.target.querySelector('svg'), 1.6); io.unobserve(e.target); }
+    }), { threshold: 0.35 });
+    document.querySelectorAll('.wcard .pitch').forEach(p => io.observe(p));
+  }
+})();
+"""
+
+
 
 def page(title: str, body: str, desc: str = "", path: str = "", image: str = "") -> str:
     d = f'<meta name="description" content="{escape(desc)}">' if desc else ""
@@ -258,6 +357,8 @@ def page(title: str, body: str, desc: str = "", path: str = "", image: str = "")
 <script>try{{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}}catch(e){{}}</script>
 <title>{escape(title)}</title>{d}{og}
 <link rel="icon" href="{FAVICON}">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;600&display=swap">
 <link rel="stylesheet" href="style.css"></head>
 <body>
 <div class="top"><div class="wrap"><a class="brand" href="index.html">{LOGO}{SITE_NAME}</a>
@@ -386,7 +487,8 @@ def watch_section(watch: list[dict]) -> str:
             f'<div class="wcards">{"".join(cards)}</div>')
 
 
-def index_page(model: dict, players_n: int, stamp: str, notes_html: str = "", watch_html: str = "") -> str:
+def index_page(model: dict, players_n: int, stamp: str, notes_html: str = "", watch_html: str = "",
+               hero: dict | None = None) -> str:
     leagues = model["leagues"]
     total = sum(v["cov"]["matches"] for v in leagues.values())
     cards = []
@@ -400,16 +502,27 @@ def index_page(model: dict, players_n: int, stamp: str, notes_html: str = "", wa
     latest = sorted(((m, lname(lg)) for lg, v in leagues.items() for m in v["recent"][:6]),
                     key=lambda t: t[0]["date"], reverse=True)[:10]
     results = "".join(result_line(m, lgname) for m, lgname in latest)
+    stats = (f'<div class="skpi"><b data-count="{total}">{total:,}</b><span>matches</span></div>'
+             f'<div class="skpi"><b data-count="{players_n}">{players_n:,}</b><span>players</span></div>'
+             f'<div class="skpi"><b data-count="{len(leagues)}">{len(leagues)}</b><span>competitions</span></div>')
+    copy = (f'<div class="stage-copy"><h1>Who really shoots,<br>and who finishes?</h1>'
+            f'<p>Every shot from {len(leagues)} competitions, placed on the pitch and rebuilt automatically '
+            f'from match data. Search a player or open a league.</p>'
+            f'<input id="q" class="search" type="search" placeholder="Search a player, e.g. Haaland" '
+            f'autocomplete="off" aria-label="Search a player"><div id="results"></div>'
+            f'<div class="skpis">{stats}</div></div>')
+    if hero:
+        svg, _ = shot_map(hero["shots"], mini=True)
+        art = (f'<div class="stage-map"><div class="pitch-live" id="stage-map">{svg}</div>'
+               f'<div class="stage-cap"><a href="{hero["url"]}">{avatar(hero["name"], hero["team"])}'
+               f'<span><b>{escape(hero["name"])}</b>{escape(hero["team"])}</span></a>'
+               f'<span class="cnt"><b data-count="{hero["sot"]}">{hero["sot"]:,}</b> shots on target</span>'
+               f'<button type="button" id="replay" class="replay">Replay</button></div></div>')
+    else:
+        art = ""
+    stage = f'<section class="stage"><div class="stage-in">{copy}{art}</div></section>'
     body = f"""
-<section class="hero"><h1>Who really shoots,<br>and who <em>finishes</em>?</h1>
-<p>Player leaderboards and shot maps for {len(leagues)} competitions, rebuilt automatically from match data.
-Search a player or pick a competition.</p>
-<input id="q" class="search" type="search" placeholder="Search a player, e.g. Haaland" autocomplete="off"
-aria-label="Search a player"><div id="results"></div>
-<div class="strip"><div class="kpi"><b>{total:,}</b><span>matches</span></div>
-<div class="kpi"><b>{players_n:,}</b><span>players</span></div>
-<div class="kpi"><b>{len(leagues)}</b><span>competitions</span></div>
-<div class="kpi"><b>{escape(stamp[:10])}</b><span>last build (UTC)</span></div></div></section>
+{stage}
 {watch_html}{notes_html}
 <h2>Competitions</h2><div class="cards">{"".join(cards)}</div>
 <h2>Latest results<small>newest matches in the data</small></h2><ul class="results">{results}</ul>
@@ -951,7 +1064,7 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
     notes_html = notes_section(shot_notes(recs, players, lname), linked_all)
     watch_html = watch_section(watch)
     files: dict[str, str] = {"style.css": CSS, "app.js": JS, ".nojekyll": "",
-                             "index.html": index_page(model, len(players), stamp, notes_html, watch_html),
+                             "index.html": index_page(model, len(players), stamp, notes_html, watch_html, watch[0] if watch else None),
                              "method.html": method_page(model, stamp), "about.html": about_page(), "live.html": live_page(latest_fc), "how.html": how_page(model, stamp),
                              "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc)}
     search = []
