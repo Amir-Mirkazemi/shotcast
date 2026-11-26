@@ -39,6 +39,12 @@ SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
 # in GitHub Actions the link follows the repository name, so renaming the repo does not break it
 REPO_URL = "https://github.com/" + os.environ.get("GITHUB_REPOSITORY", "Amir-Mirkazemi/pitchline-live")
 
+LEAGUE_COLOR = {"eng.1": "#6a2c91", "esp.1": "#d6402b", "ita.1": "#1e6fd9", "ger.1": "#d9232e", "fra.1": "#2748c9",
+                "usa.1": "#1b4fa8", "uefa.champions": "#1a4fbf", "afc.champions": "#0f8a5f", "fifa.world": "#9b1c3b"}
+PAGE_COLOR = {"News": "#7c5cff", "Match Day": "#22c55e", "Forecast": "#38bdf8", "Call your shot": "#ff7a45",
+              "Best of the best": "#ffd23f", "About": "#8fa3c7", "How it is built": "#8fa3c7",
+              "Method and data quality": "#8fa3c7"}
+
 LEAGUE_NAMES = {
     "eng.1": "Premier League", "esp.1": "La Liga", "ita.1": "Serie A", "fra.1": "Ligue 1",
     "ger.1": "Bundesliga", "usa.1": "MLS", "uefa.champions": "Champions League",
@@ -46,13 +52,13 @@ LEAGUE_NAMES = {
 }
 
 CSS = """
-:root { --bg:#f6f5ef; --panel:#fff; --panel2:#f0efe6; --line:#e2e0d3; --text:#1b201c; --muted:#657067;
-  --accent:#16833a; --ink:#fff; --blue:#1479b8; --amber:#c88a00; --red:#d64545; --grey:#8a948d;
-  --pitch:#e3f1d9; --pline:#fff; --glow:#dcefd0;
-  --shadow:0 1px 2px rgba(20,30,20,.06), 0 6px 18px rgba(20,30,20,.05); }
-:root[data-theme="dark"] { --bg:#0a0f0d; --panel:#111915; --panel2:#17211b; --line:#223028; --text:#e8f0ea;
-  --muted:#8aa196; --accent:#b6f23f; --ink:#0a0f0d; --blue:#4cc9f0; --amber:#ffd166; --red:#ff6b6b;
-  --grey:#7f8f86; --pitch:#143222; --pline:#2d4a38; --glow:#14301f; --shadow:none; }
+:root, :root[data-theme="dark"] { --bg:#070b14; --panel:#0e1524; --panel2:#151e33; --line:#212c46; --text:#eef2fb;
+  --muted:#93a0bc; --accent:#ffd23f; --ink:#0b1020; --blue:#5cc8ff; --amber:#ffb84d; --red:#ff6b7a; --grey:#7d8aa6;
+  --green:#22c55e; --pitch:#0f3b27; --pline:rgba(255,255,255,.3); --glow:#14244a; --shadow:none; }
+:root[data-theme="light"] { --bg:#eef1f7; --panel:#fff; --panel2:#f1f4fa; --line:#dce2ee; --text:#0d1426;
+  --muted:#586581; --accent:#0a7d4a; --ink:#fff; --blue:#1479b8; --amber:#c88a00; --red:#d64545; --grey:#8a94a8;
+  --green:#16833a; --pitch:#dff0d4; --pline:#fff; --glow:#dbe6fb;
+  --shadow:0 1px 2px rgba(20,30,60,.06), 0 6px 18px rgba(20,30,60,.06); }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
 body { margin:0; background:radial-gradient(1100px 360px at 50% -90px, var(--glow), var(--bg)) no-repeat var(--bg);
@@ -93,19 +99,20 @@ h2 small { color:var(--muted); font-weight:400; font-size:.85rem; margin-left:8p
 .card .lead b { color:var(--accent); font-variant-numeric:tabular-nums; }
 .results { box-shadow:var(--shadow); list-style:none; margin:0; padding:0; background:var(--panel); border:1px solid var(--line);
   border-radius:12px; overflow:hidden; }
-.results li { display:grid; grid-template-columns:78px 1fr auto 1fr auto; gap:10px; padding:10px 14px; align-items:center;
+.results li { display:grid; grid-template-columns:92px minmax(0,1fr) 76px minmax(0,1fr) 150px; gap:12px; padding:11px 16px; align-items:center;
   border-bottom:1px solid var(--line); font-size:.92rem; }
 .results li:last-child { border-bottom:0; }
 .results .d { color:var(--muted); font-size:.8rem; white-space:nowrap; } .results .h { text-align:right; }
-.results .sc { font-weight:800; font-variant-numeric:tabular-nums; background:var(--panel2); padding:2px 10px;
-  border-radius:6px; }
+.results .sc { font-weight:800; font-variant-numeric:tabular-nums; background:var(--panel2); padding:3px 0;
+  border-radius:8px; text-align:center; width:76px; }
+.results .a { text-align:left; }
 .results li.on .d { color:var(--green,#16833a); font-weight:700; } .results li.on .sc { background:var(--green,#16833a); color:#fff; }
 .results .fcl { grid-column:1 / -1; color:var(--muted); font-size:.78rem; }
 .results .lg { color:var(--muted); font-size:.75rem; text-align:right; min-width:92px; }
 .tabs { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 12px; }
-.pick { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:999px; padding:3px 12px; cursor:pointer; font:inherit; font-size:.8rem; }
-.pick[aria-pressed=true] { background:var(--accent); border-color:var(--accent); font-weight:700; }
-#call-lg { font:inherit; padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--ink); margin:8px 0; }
+.pick { background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:3px 12px; cursor:pointer; font:inherit; font-size:.8rem; }
+.pick[aria-pressed=true] { background:var(--accent); border-color:var(--accent); color:var(--ink); font-weight:700; }
+#call-lg { font:inherit; padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--text); margin:8px 0; }
 h3 { margin:22px 0 8px; font-size:1.05rem; }
 .tabs button { background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:999px;
   padding:7px 14px; font:inherit; font-size:.88rem; cursor:pointer; }
@@ -131,7 +138,7 @@ td.hl b { position:relative; }
   padding:3px 11px; font-size:.8rem; margin:8px 6px 0 0; } .badge b { color:var(--accent); }
 .mapbox { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:18px; align-items:start; }
 @media (max-width:760px) { .mapbox { grid-template-columns:1fr; } .opt { display:none; } .results li {
-  grid-template-columns:74px 1fr auto 1fr; padding:9px 10px; font-size:.86rem; } .results .lg { display:none; }
+  grid-template-columns:62px minmax(0,1fr) 64px minmax(0,1fr); padding:9px 10px; font-size:.86rem; } .results .lg { display:none; } .results .sc { width:64px; }
   .results .d { font-size:.74rem; } .kpi b { font-size:1.25rem; }
   .top .wrap { gap:12px; } .top nav { gap:10px; font-size:.8rem; flex-wrap:wrap; justify-content:flex-end; } .top .wrap { height:auto;
   padding-top:8px; padding-bottom:8px; } }
@@ -288,35 +295,42 @@ h2 small { font-family:Inter,system-ui,sans-serif; letter-spacing:0; }
 @media (prefers-reduced-motion:reduce) { .anim .dot { animation:none; opacity:var(--o,.95); } .anim .trail { display:none; } }
 """
 CSS += """
-/* ---- design pass 2: kit avatars, team-coloured cards, alignment ---- */
-:root { --bg:#f3f5f1; --accent:#0b7d4b; --line:#dfe4dc; --muted:#5d6b62; }
-.av { width:46px; height:46px; display:inline-block; flex:none; background:none; border-radius:0; }
-.av svg { width:100%; height:100%; display:block; filter:drop-shadow(0 2px 3px rgba(0,0,0,.25)); }
-.av.lg { width:84px; height:84px; }
-.wcard .av, .phead .av { box-shadow:none; }
+/* ---- design pass 2: kit avatars, club-coloured cards, headers ---- */
+.av { width:46px; height:46px; display:inline-block; flex:none; }
+.av svg { width:100%; height:100%; display:block; filter:drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
+.av.lg { width:96px; height:96px; }
 .wcards { grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:16px; align-items:stretch; }
-.wcard { display:flex; flex-direction:column; gap:12px; padding:16px; border:0; color:#fff;
-  background:linear-gradient(165deg, hsl(var(--h) 46% 26%), hsl(var(--h) 44% 10%)); }
-.wcard:hover { transform:translateY(-3px); }
-.wh .av { width:54px; height:54px; } .wh { margin:0; } .wh b { font-size:1.05rem; color:#fff; } .wh div span { color:rgba(255,255,255,.68); }
-.wcard .pitch.mini { background:rgba(0,0,0,.28); border:0; padding:6px; border-radius:12px; }
-.wcard .turf { fill:rgba(0,0,0,.22); } .wcard .pl { stroke:rgba(255,255,255,.3); }
+.wcard { display:flex; flex-direction:column; gap:12px; padding:16px; border:1px solid rgba(255,255,255,.08); color:#fff;
+  background:linear-gradient(165deg, color-mix(in srgb, var(--kc) 62%, #0a1020), #0a1020 92%); }
+.wcard:hover { transform:translateY(-3px); border-color:rgba(255,255,255,.3); }
+.wh { margin:0; } .wh .av { width:54px; height:54px; } .wh b { font-size:1.05rem; color:#fff; }
+.wh div span { color:rgba(255,255,255,.7); }
+.wcard .pitch.mini { background:rgba(0,0,0,.3); border:0; padding:6px; border-radius:12px; }
+.wcard .turf { fill:rgba(0,0,0,.25); } .wcard .pl { stroke:rgba(255,255,255,.3); }
 .wcard .dot { stroke:rgba(0,0,0,.45); stroke-width:1.5; }
 .wcard .s-goal { fill:#ffd23f; stroke:#fff; stroke-width:2; }
-.wcard .dot:not(.s-goal), .stage .dot:not(.s-goal) { opacity:.78; --o:.78; }
+.wcard .dot:not(.s-goal), .stage .dot:not(.s-goal) { opacity:.8; --o:.8; }
 .big { display:flex; gap:28px; margin-top:auto; padding-top:2px; }
 .big div { display:flex; flex-direction:column; }
 .big b { font-size:2.1rem; line-height:1; color:#ffd23f; font-weight:800; }
-.big span { color:rgba(255,255,255,.7); font-size:.8rem; margin-top:4px; }
-.phead { gap:20px; } .herostat b { color:var(--accent); }
+.big span { color:rgba(255,255,255,.72); font-size:.8rem; margin-top:4px; }
+.ph[style*="--kc"] { background:linear-gradient(115deg, color-mix(in srgb, var(--kc) 55%, var(--bg)) 0%, var(--bg) 78%);
+  border:1px solid var(--line); border-left:5px solid var(--kc); border-radius:16px; padding:26px 28px 24px; margin:22px 0 18px; }
+.phead { gap:22px; } .herostat b { color:var(--accent); }
 .stage .av { width:44px; height:44px; }
-.notes { grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); }
-.news-tools { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 18px; }
-.news-tools button { font:inherit; font-size:.85rem; cursor:pointer; padding:5px 14px; border-radius:999px;
-  background:var(--panel); border:1px solid var(--line); color:var(--muted); }
-.news-tools button[aria-pressed="true"] { background:var(--text); color:var(--bg); border-color:var(--text); }
-.news-day { font-size:1rem; margin:30px 0 10px; color:var(--muted); font-weight:600; letter-spacing:0; }
+.card { border-top:3px solid color-mix(in srgb, var(--accent) 55%, transparent); }
+.top { background:color-mix(in srgb, var(--panel) 85%, transparent); }
+.news-tools { display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; margin:6px 0 10px; }
+.news-tools label { display:flex; flex-direction:column; gap:5px; font-size:.78rem; color:var(--muted); }
+.news-tools select { font:inherit; font-size:.92rem; color:var(--text); background:var(--panel); border:1px solid var(--line);
+  border-radius:10px; padding:9px 34px 9px 12px; min-width:190px; cursor:pointer; }
+.news-tools select:focus { outline:2px solid var(--accent); outline-offset:1px; }
+.news-tools .count { margin-left:auto; color:var(--muted); font-size:.85rem; padding-bottom:10px; }
+#feed { display:flex; flex-direction:column; } #feed.rev { flex-direction:column-reverse; }
+.news-day { font-size:.95rem; margin:26px 0 10px; color:var(--muted); font-weight:600; }
+.note-card .nt small { display:block; color:var(--muted); font-size:.74rem; margin-bottom:2px; }
 .more-link { display:inline-block; margin-top:14px; font-weight:600; }
+@media (max-width:760px) { .news-tools label, .news-tools select { width:100%; } .ph[style*="--kc"] { padding:20px 18px; } }
 """
 
 JS += """
@@ -382,9 +396,12 @@ def page(title: str, body: str, desc: str = "", path: str = "", image: str = "")
             og += (f'<meta property="og:image" content="{SITE_URL}/{escape(image)}">'
                    '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">'
                    '<meta name="twitter:card" content="summary_large_image">')
+    m = re.search(r'<section class="ph"><h1>([^<{]+)', body)
+    if m and m.group(1) in PAGE_COLOR:
+        body = body.replace('<section class="ph">', f'<section class="ph" style="--kc:{PAGE_COLOR[m.group(1)]}">', 1)
     links = " · ".join(f'<a href="{u}">{n}</a>' for n, u in OWNER_LINKS)
     return f"""<!doctype html>
-<html lang="en" data-theme="light"><head><meta charset="utf-8">
+<html lang="en" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>try{{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}}catch(e){{}}</script>
 <title>{escape(title)}</title>{d}{og}
@@ -396,7 +413,7 @@ def page(title: str, body: str, desc: str = "", path: str = "", image: str = "")
 <div class="top"><div class="wrap"><a class="brand" href="index.html">{LOGO}{SITE_NAME}</a>
 <nav><a href="best.html">Best of</a><a href="index.html">Leagues</a><a href="news.html">News</a><a href="live.html">Match Day</a>
 <a href="forecast.html">Forecast</a><a href="call.html">Call your shot</a><a href="about.html">About</a>
-<button id="theme" type="button">Dark</button></nav>
+<button id="theme" type="button">Light</button></nav>
 </div></div>
 <div class="wrap">{body}
 <footer>Built by <b>{OWNER}</b> · {links}<br>Match data from ESPN (unofficial endpoints). Not affiliated with ESPN
@@ -477,39 +494,108 @@ def _span(c: dict) -> str:
     return f"{c['first']} to {c['last']}" if c.get("first") else "dates unknown"
 
 
+# Main colours of well-known clubs: (primary, secondary, pattern). Colours only: no crests, sponsors or kit designs.
+CLUB_KITS = {
+    "real madrid": ("#f4f4f2", "#e8b923", "solid"), "barcelona": ("#a50044", "#004d98", "vstripes"),
+    "atl\u00e9tico": ("#cb3524", "#f4f4f2", "vstripes"), "atletico": ("#cb3524", "#f4f4f2", "vstripes"),
+    "athletic": ("#d71920", "#f4f4f2", "vstripes"), "real sociedad": ("#0a5cb8", "#f4f4f2", "vstripes"),
+    "betis": ("#0b9444", "#f4f4f2", "vstripes"), "sevilla": ("#f4f4f2", "#d71920", "solid"),
+    "valencia": ("#f4f4f2", "#111111", "solid"), "villarreal": ("#f6d400", "#0a3a8f", "solid"),
+    "girona": ("#d71920", "#f4f4f2", "solid"), "levante": ("#a50034", "#0a3a8f", "vstripes"),
+    "paris saint": ("#0a2a5e", "#d71920", "band"), "marseille": ("#f4f4f2", "#2eb4e6", "solid"),
+    "lyon": ("#f4f4f2", "#1a3d8f", "band"), "monaco": ("#d71920", "#f4f4f2", "sash"), "lille": ("#d71920", "#0a2a5e", "solid"),
+    "manchester city": ("#6cabdd", "#f4f4f2", "solid"), "man city": ("#6cabdd", "#f4f4f2", "solid"),
+    "manchester united": ("#da291c", "#111111", "solid"), "man united": ("#da291c", "#111111", "solid"),
+    "liverpool": ("#c8102e", "#f4f4f2", "solid"), "arsenal": ("#ef0107", "#f4f4f2", "sleeves"),
+    "chelsea": ("#034694", "#f4f4f2", "solid"), "tottenham": ("#f4f4f2", "#132257", "solid"),
+    "newcastle": ("#111111", "#f4f4f2", "vstripes"), "aston villa": ("#670e36", "#95bfe5", "sleeves"),
+    "brentford": ("#e30613", "#f4f4f2", "vstripes"), "brighton": ("#0057b8", "#f4f4f2", "vstripes"),
+    "west ham": ("#7a263a", "#1bb1e7", "sleeves"), "everton": ("#003399", "#f4f4f2", "solid"),
+    "fulham": ("#f4f4f2", "#111111", "solid"), "wolves": ("#fdb913", "#111111", "solid"),
+    "crystal palace": ("#1b458f", "#c4122e", "vstripes"), "nottingham": ("#dd0000", "#f4f4f2", "solid"),
+    "bournemouth": ("#da291c", "#111111", "vstripes"), "leeds": ("#f4f4f2", "#1d428a", "solid"),
+    "sunderland": ("#eb172b", "#f4f4f2", "vstripes"), "burnley": ("#6c1d45", "#99d6ea", "sleeves"),
+    "bayern": ("#dc052d", "#f4f4f2", "solid"), "dortmund": ("#fde100", "#111111", "solid"),
+    "leverkusen": ("#e32221", "#111111", "solid"), "leipzig": ("#f4f4f2", "#dd0741", "solid"),
+    "frankfurt": ("#111111", "#e1000f", "solid"), "stuttgart": ("#f4f4f2", "#e32219", "band"),
+    "juventus": ("#f4f4f2", "#111111", "vstripes"), "inter miami": ("#f7b5cd", "#111111", "solid"),
+    "internazionale": ("#0a4a9f", "#111111", "vstripes"), "inter": ("#0a4a9f", "#111111", "vstripes"),
+    "milan": ("#d71920", "#111111", "vstripes"), "napoli": ("#12a0d7", "#f4f4f2", "solid"),
+    "roma": ("#8e1f2f", "#f0bc42", "solid"), "lazio": ("#87d8f7", "#f4f4f2", "solid"),
+    "atalanta": ("#1e71b8", "#111111", "vstripes"), "fiorentina": ("#5b2a86", "#f4f4f2", "solid"),
+    "bologna": ("#a50034", "#0a3a8f", "vstripes"), "como": ("#1e5eb8", "#f4f4f2", "solid"),
+    "lafc": ("#111111", "#c39e6d", "solid"), "los angeles football": ("#111111", "#c39e6d", "solid"),
+    "galaxy": ("#f4f4f2", "#00245d", "solid"), "seattle": ("#5d9741", "#005595", "solid"),
+    "benfica": ("#e30613", "#f4f4f2", "solid"), "porto": ("#0a3a8f", "#f4f4f2", "vstripes"),
+    "sporting": ("#008057", "#f4f4f2", "hoops"), "ajax": ("#f4f4f2", "#d2122e", "band"),
+    "celtic": ("#16973d", "#f4f4f2", "hoops"), "galatasaray": ("#f6a800", "#a90432", "sash"),
+    "fenerbah": ("#ffed00", "#0a1f5e", "solid"), "club brugge": ("#1d6ac2", "#111111", "solid"),
+    "psv": ("#e30613", "#f4f4f2", "solid"), "feyenoord": ("#e30613", "#f4f4f2", "sash"),
+    "columbus": ("#fedd00", "#111111", "solid"), "cincinnati": ("#f05323", "#1d3c8c", "solid"),
+}
+
+
+def kit(team: str, name: str = "") -> tuple[str, str, str]:
+    """(primary, secondary, pattern) for a club: its real main colours if known, else a generated kit."""
+    t = (team or "").lower()
+    for frag in sorted(CLUB_KITS, key=len, reverse=True):
+        if frag in t:
+            return CLUB_KITS[frag]
+    h = sum(ord(c) * (i + 3) for i, c in enumerate(team or name)) % 360
+    pat = ("hoops", "vstripes", "sash", "band")[zlib.crc32((team or name).encode()) % 4]
+    return f"hsl({h} 58% 38%)", f"hsl({h} 60% 58%)", pat
+
+
+def card_color(team: str, name: str = "") -> str:
+    """Club colour for backgrounds: the secondary colour when the main one is white or very light."""
+    base, alt, _ = kit(team, name)
+    return alt if _is_light(base) and not _is_light(alt) else base
+
+
 def team_hue(name: str, team: str = "") -> int:
     return sum(ord(c) * (i + 3) for i, c in enumerate(team or name)) % 360
+
+
+def _is_light(c: str) -> bool:
+    if c.startswith("#") and len(c) == 7:
+        r, g, b = (int(c[i:i + 2], 16) for i in (1, 3, 5))
+        return (0.299 * r + 0.587 * g + 0.114 * b) > 150
+    return False
 
 
 _SHIRT = "M21 8 L28 5 Q32 11 36 5 L43 8 L58 19 L51 30 L45 26 V58 H19 V26 L13 30 L6 19 Z"
 
 
 def avatar(name: str, team: str = "", size: str = "") -> str:
-    """A generic football shirt in a colour and pattern taken from the team name, with the player's initials.
-    An illustration, not a likeness of anyone."""
+    """A generic football shirt in the club's main colours with the player's initials. An illustration:
+    no crest, sponsor or likeness of anyone."""
     parts = [w for w in re.split(r"[\s.-]+", name) if w]
     initials = (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper() if parts else "?"
-    h = team_hue(name, team)
-    key = zlib.crc32((team or name).encode())
-    pat, cid = key % 4, f"k{key:x}"
-    base, light, dark = f"hsl({h} 58% 38%)", f"hsl({h} 60% 55%)", f"hsl({h} 60% 24%)"
-    if pat == 0:                                        # hoops
-        deco = "".join(f'<rect x="0" y="{y}" width="64" height="6" fill="{light}"/>' for y in range(12, 60, 12))
-    elif pat == 1:                                      # vertical stripes
-        deco = "".join(f'<rect x="{x}" y="0" width="7" height="64" fill="{light}"/>' for x in range(15, 52, 14))
-    elif pat == 2:                                      # sash
-        deco = f'<polygon points="6,8 22,8 64,50 64,64 50,64" fill="{light}" opacity=".9"/>'
-    else:                                               # plain with a chest band
-        deco = f'<rect x="0" y="30" width="64" height="8" fill="{light}" opacity=".55"/>'
+    base, alt, pat = kit(team, name)
+    cid = f"k{zlib.crc32((team or name).encode()):x}"
+    if pat == "hoops":
+        deco = "".join(f'<rect x="0" y="{y}" width="64" height="6" fill="{alt}"/>' for y in range(14, 60, 12))
+    elif pat == "vstripes":
+        deco = "".join(f'<rect x="{x}" y="0" width="7" height="64" fill="{alt}"/>' for x in range(13, 52, 14))
+    elif pat == "sash":
+        deco = f'<polygon points="6,8 20,8 64,52 64,64 50,64" fill="{alt}"/>'
+    elif pat == "band":
+        deco = f'<rect x="0" y="27" width="64" height="9" fill="{alt}"/>'
+    elif pat == "sleeves":
+        deco = (f'<rect x="0" y="0" width="19" height="64" fill="{alt}"/><rect x="45" y="0" width="19" height="64" fill="{alt}"/>')
+    else:
+        deco = ""
+    on_light = _is_light(base) if pat in ("solid", "sleeves") else not _is_light(base) and False
+    txt, edge = ("#111827", "#ffffff") if on_light else ("#ffffff", "#0b1020")
     svg = (f'<svg viewBox="0 0 64 64" role="img" aria-hidden="true"><defs><clipPath id="{cid}">'
            f'<path d="{_SHIRT}"/></clipPath></defs><path d="{_SHIRT}" fill="{base}"/>'
            f'<g clip-path="url(#{cid})">{deco}</g>'
-           f'<path d="M13 30 L19 26 V40 L11 36 Z M51 30 L45 26 V40 L53 36 Z" fill="{dark}" opacity=".55"/>'
-           f'<path d="M28 5 Q32 12 36 5 L33 4 Q32 7 31 4 Z" fill="{dark}"/>'
-           f'<text x="32" y="44" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" '
-           f'stroke="{dark}" stroke-width=".8" paint-order="stroke" font-family="Inter,Arial,sans-serif">'
-           f'{escape(initials)}</text></svg>')
-    return f'<span class="av {size}" style="--h:{h}">{svg}</span>'
+           f'<path d="{_SHIRT}" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1"/>'
+           f'<path d="M26 6 Q32 15 38 6" fill="none" stroke="{alt}" stroke-width="2.6" stroke-linecap="round"/>'
+           f'<text x="32" y="44" text-anchor="middle" font-size="15" font-weight="800" fill="{txt}" '
+           f'stroke="{edge}" stroke-width="2.2" paint-order="stroke" stroke-linejoin="round" '
+           f'font-family="Inter,Arial,sans-serif">{escape(initials)}</text></svg>')
+    return f'<span class="av {size}" style="--kc:{base}">{svg}</span>'
 
 
 KIND_LABEL = {"hattrick": "Hat-trick", "form": "In form", "heavy": "Shot-heavy", "per90": "Per 90",
@@ -541,16 +627,22 @@ def watch_section(watch: list[dict]) -> str:
                  f'<span>{escape(w["team"])}</span></div></div><div class="pitch mini">{svg}</div>'
                  f'<div class="big"><div><b>{w["sot"]:,}</b><span>shots on target</span></div>'
                  f'<div><b>{w["goals"]:,}</b><span>goals</span></div></div>')
-        cards.append(f'<a class="wcard" style="--h:{team_hue(w["name"], w["team"])}" href="{w["url"]}">{inner}</a>')
+        cards.append(f'<a class="wcard" style="--kc:{card_color(w["team"], w["name"])}" href="{w["url"]}">{inner}</a>')
     return (f'<h2>Players to watch<small>most shots on target across all stored competitions</small></h2>'
             f'<div class="wcards">{"".join(cards)}</div>')
 
 
 def news_page(notes: list[dict], linked: set) -> str:
     kinds = [k for k in KIND_LABEL if any(n["kind"] == k for n in notes)]
-    tools = ('<div class="news-tools" id="news-tools"><button type="button" data-k="all" aria-pressed="true">All</button>'
-             + "".join(f'<button type="button" data-k="{k}" aria-pressed="false">{KIND_LABEL[k]}</button>' for k in kinds)
-             + "</div>")
+    lgs = sorted({n["league"] for n in notes}, key=lname)
+    tools = ('<div class="news-tools" id="news-tools">'
+             '<label>Competition<select id="f-lg"><option value="all">All competitions</option>'
+             + "".join(f'<option value="{lg}">{escape(lname(lg))}</option>' for lg in lgs) + '</select></label>'
+             '<label>Story type<select id="f-k"><option value="all">All stories</option>'
+             + "".join(f'<option value="{k}">{KIND_LABEL[k]}</option>' for k in kinds) + '</select></label>'
+             '<label>Order<select id="f-o"><option value="new">Newest first</option>'
+             '<option value="old">Oldest first</option></select></label>'
+             '<span id="f-n" class="count"></span></div>')
     days: dict[str, list[dict]] = {}
     for n in sorted(notes, key=lambda n: n["date"], reverse=True):
         days.setdefault(n["date"], []).append(n)
@@ -558,19 +650,26 @@ def news_page(notes: list[dict], linked: set) -> str:
     for d, items in days.items():
         cards = []
         for n in items:
-            inner = (f'<span class="kind k-{n["kind"]}">{KIND_LABEL[n["kind"]]}</span><span class="nt">{escape(n["text"])}</span>')
-            href = player_url(n["league"], n["pid"]) if n["pid"] and (n["league"], n["pid"]) in linked else ""
-            cards.append(f'<a class="note-card" data-k="{n["kind"]}" href="{href}">{inner}</a>' if href
-                         else f'<div class="note-card" data-k="{n["kind"]}">{inner}</div>')
-        parts.append(f'<section class="news-day-group"><h3 class="news-day">{d}</h3><div class="notes">{"".join(cards)}</div></section>')
-    js = ("<script>(function(){var t=document.getElementById('news-tools');t.addEventListener('click',function(e){"
-          "var b=e.target.closest('button');if(!b)return;t.querySelectorAll('button').forEach(function(x){"
-          "x.setAttribute('aria-pressed',x===b)});document.querySelectorAll('.note-card').forEach(function(c){"
-          "c.hidden=b.dataset.k!=='all'&&c.dataset.k!==b.dataset.k});document.querySelectorAll('.news-day-group')"
-          ".forEach(function(g){g.hidden=!g.querySelector('.note-card:not([hidden])')})})})()</script>")
+            inner = (f'<span class="kind k-{n["kind"]}">{KIND_LABEL[n["kind"]]}</span>'
+                     f'<span class="nt"><small>{escape(lname(n["league"]))}</small>{escape(n["text"])}</span>')
+            attrs = f'data-k="{n["kind"]}" data-lg="{n["league"]}"'
+            if n["pid"] and (n["league"], n["pid"]) in linked:
+                cards.append(f'<a class="note-card" {attrs} href="{player_url(n["league"], n["pid"])}">{inner}</a>')
+            else:
+                cards.append(f'<div class="note-card" {attrs}>{inner}</div>')
+        parts.append(f'<section class="news-day-group"><h3 class="news-day">{d}</h3>'
+                     f'<div class="notes">{"".join(cards)}</div></section>')
+    js = ("<script>(function(){var lg=document.getElementById('f-lg'),k=document.getElementById('f-k'),"
+          "o=document.getElementById('f-o'),n=document.getElementById('f-n'),box=document.getElementById('feed');"
+          "function run(){var shown=0;document.querySelectorAll('.note-card').forEach(function(c){"
+          "var ok=(lg.value==='all'||c.dataset.lg===lg.value)&&(k.value==='all'||c.dataset.k===k.value);"
+          "c.hidden=!ok;if(ok)shown++});document.querySelectorAll('.news-day-group').forEach(function(g){"
+          "g.hidden=!g.querySelector('.note-card:not([hidden])')});box.classList.toggle('rev',o.value==='old');"
+          "n.textContent=shown+(shown===1?' story':' stories')}"
+          "[lg,k,o].forEach(function(e){e.addEventListener('change',run)});run()})()</script>")
     body = (f'<section class="ph"><h1>News</h1><div class="meta">Stat stories written automatically from the stored '
-            f'matches. No outside articles: every line comes from the data on this site.</div></section>'
-            f'{tools}{"".join(parts) or "<p class=note>No stories yet.</p>"}{js}')
+            f'matches and refreshed every night. No outside articles: every line comes from the data on this site.'
+            f'</div></section>{tools}<div id="feed">{"".join(parts) or "<p class=note>No stories yet.</p>"}</div>{js}')
     return page(f"News | {SITE_NAME}", body, "Automatically written shot and goal stories from the latest matches.",
                 "news.html", "og-home.png")
 
@@ -637,7 +736,7 @@ def league_page(lg: str, v: dict, linked: set, n: int) -> str:
             'so per-90 rates are unavailable.</p>')
     body = f"""
 <p class="crumbs"><a href="index.html">Competitions</a> / {escape(lname(lg))}</p>
-<section class="ph"><h1>{escape(lname(lg))}</h1>
+<section class="ph" style="--kc:{LEAGUE_COLOR.get(lg, "#2a3b66")}"><h1>{escape(lname(lg))}</h1>
 <div class="meta">{v["cov"]["matches"]:,} matches stored · {escape(_span(v["cov"]))}</div></section>
 <h2>Leaderboards<small>top {n} · click a column to sort</small></h2>
 <div class="tabs">{tabs}</div>{panels}{note}
@@ -659,7 +758,7 @@ def team_page(lg: str, t: dict, v: dict, linked: set) -> str:
     body = f"""
 <p class="crumbs"><a href="index.html">Competitions</a> / <a href="{lg}.html">{escape(lname(lg))}</a> /
 {escape(t["name"])}</p>
-<section class="ph"><h1>{escape(t["name"])}</h1>
+<section class="ph" style="--kc:{card_color(t["name"])}"><h1>{escape(t["name"])}</h1>
 <div class="meta">{escape(lname(lg))} · {t["p"]} matches in the stored data</div>
 <span class="badge"><b>{t["w"]}</b> W</span><span class="badge"><b>{t["d"]}</b> D</span>
 <span class="badge"><b>{t["l"]}</b> L</span><span class="badge">Goals <b>{t["gf"]}</b>–<b>{t["ga"]}</b>
@@ -744,7 +843,7 @@ def player_page(lg: str, r: dict, shots: list[dict], ranks: dict, card: bool = F
     body = f"""
 <p class="crumbs"><a href="index.html">Competitions</a> / <a href="{lg}.html">{escape(lname(lg))}</a> /
 {escape(r["player"])}</p>
-<section class="ph phead">{avatar(r["player"], r["team"], "lg")}<div><h1>{escape(r["player"])}</h1>
+<section class="ph phead" style="--kc:{card_color(r["team"], r["player"])}">{avatar(r["player"], r["team"], "lg")}<div><h1>{escape(r["player"])}</h1>
 <div class="meta"><a href="{team_url(lg, r["team"])}">{escape(r["team"])}</a> · {escape(lname(lg))}</div>
 <span class="badge">Shots on target <b>#{sot_rank}</b> of {size}</span>
 <span class="badge">Goals <b>#{goal_rank}</b> of {size}</span></div>
@@ -959,7 +1058,7 @@ function draw(){
   var chosen=d.players.filter(function(p){return mine.indexOf(p.athlete_id)>=0});
   var yours=chosen.length?('<h2>Your picks</h2><ul class="plain">'+chosen.map(function(p){
     return '<li><b>'+esc(p.player)+'</b> ('+esc(p.team)+'): '+p.so_far+' on target so far, the model projects '+Math.round(p.proj)+
-      ' (range '+p.lo+'-'+p.hi+')</li>'}).join("")+'</ul><p class="note">The model\'s top pick is <b>'+esc(d.players[0].player)+
+      ' (range '+p.lo+'-'+p.hi+')</li>'}).join("")+'</ul><p class="note">The model’s top pick is <b>'+esc(d.players[0].player)+
       '</b> ('+Math.round(d.players[0].proj)+'). Your picks stay in this browser only.</p>')
     :'<p class="note">Pick up to three players you think will finish with the most shots on target.</p>';
   box.innerHTML=yours+'<h2>'+esc(names[lg]||lg)+'<small>season '+esc(d.season)+', model projection</small></h2>'+
