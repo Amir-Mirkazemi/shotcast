@@ -131,3 +131,12 @@ def test_build_includes_new_pages_and_links(tmp_path):
     assert "&lt;b&gt;" in (out / "call.html").read_text() or "Sam &lt;b&gt;" in (out / "call.html").read_text()
     home = (out / "index.html").read_text()
     assert "Built by" in home and "Amir Mirkazemi" in home and 'href="best.html"' in home
+
+
+def test_matchday_data_groups_and_limits():
+    from pitchline.site import matchday_data
+    fc = {"matchday": [{"league": "eng.1", "event_id": "1", "player": f"P{i}", "team": "A", "pred": 1 - i / 10}
+                       for i in range(5)]}
+    out = matchday_data(fc, per_match=3)
+    assert list(out) == ["eng.1:1"] and len(out["eng.1:1"]) == 3
+    assert matchday_data(None) == {}

@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
@@ -16,6 +17,7 @@ from pathlib import Path
 from . import cards
 from .forecast import load_forecasts, scorecard
 from .leaderboard import read_records, totals_from_records
+from .notes import shot_notes
 from .sitedata import (
     MIN_MINUTES_BEST,
     MIN_MINUTES_PER90,
@@ -97,6 +99,7 @@ h2 small { color:var(--muted); font-weight:400; font-size:.85rem; margin-left:8p
 .results .sc { font-weight:800; font-variant-numeric:tabular-nums; background:var(--panel2); padding:2px 10px;
   border-radius:6px; }
 .results li.on .d { color:var(--green,#16833a); font-weight:700; } .results li.on .sc { background:var(--green,#16833a); color:#fff; }
+.results .fcl { grid-column:1 / -1; color:var(--muted); font-size:.78rem; }
 .results .lg { color:var(--muted); font-size:.75rem; text-align:right; min-width:92px; }
 .tabs { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 12px; }
 .pick { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:999px; padding:3px 12px; cursor:pointer; font:inherit; font-size:.8rem; }
@@ -131,6 +134,30 @@ td.hl b { position:relative; }
   .results .d { font-size:.74rem; } .kpi b { font-size:1.25rem; }
   .top .wrap { gap:12px; } .top nav { gap:10px; font-size:.8rem; flex-wrap:wrap; justify-content:flex-end; } .top .wrap { height:auto;
   padding-top:8px; padding-bottom:8px; } }
+.av { width:44px; height:44px; border-radius:50%; display:inline-grid; place-items:center; flex:none;
+  background:hsl(var(--h) 52% 36%); color:#fff; font-weight:800; font-size:.95rem; letter-spacing:.02em; }
+.av.lg { width:72px; height:72px; font-size:1.5rem; }
+.phead { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.phead > div:nth-child(2) { flex:1; min-width:200px; }
+.herostat { text-align:right; } .herostat b { display:block; font-size:clamp(2.6rem,8vw,4rem); line-height:1;
+  color:var(--accent); font-variant-numeric:tabular-nums; } .herostat span { color:var(--muted); font-size:.85rem; }
+.wcards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; }
+.wcard { display:block; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px;
+  color:var(--text); text-decoration:none; box-shadow:var(--shadow); transition:transform .15s, border-color .15s; }
+.wcard:hover { transform:translateY(-3px); border-color:var(--accent); }
+.wh { display:flex; align-items:center; gap:10px; margin-bottom:10px; } .wh b { display:block; }
+.wh div span { color:var(--muted); font-size:.8rem; }
+.pitch.mini { padding:6px; box-shadow:none; background:var(--panel2); }
+.big { display:grid; grid-template-columns:3.4rem 1fr; gap:0 8px; align-items:baseline; margin-top:10px; }
+.big b { font-size:1.9rem; line-height:1.15; color:var(--accent); font-variant-numeric:tabular-nums; }
+.big span { color:var(--muted); font-size:.82rem; }
+.notes { display:grid; grid-template-columns:repeat(auto-fill,minmax(310px,1fr)); gap:10px; }
+.note-card { display:flex; gap:10px; align-items:flex-start; background:var(--panel); border:1px solid var(--line);
+  border-radius:12px; padding:12px 14px; color:var(--text); text-decoration:none; box-shadow:var(--shadow); }
+a.note-card:hover { border-color:var(--accent); }
+.note-card .nt { font-size:.92rem; line-height:1.45; }
+.kind { flex:none; font-size:.68rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; padding:3px 8px;
+  border-radius:999px; background:var(--panel2); border:1px solid var(--line); color:var(--accent); margin-top:2px; }
 .pitch { box-shadow:var(--shadow); background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; }
 .pitch svg { width:100%; height:auto; display:block; }
 .pl { fill:none; stroke:var(--pline); stroke-width:3; } .pl.goal { stroke:var(--muted); }
@@ -234,7 +261,7 @@ def page(title: str, body: str, desc: str = "", path: str = "", image: str = "")
 <link rel="stylesheet" href="style.css"></head>
 <body>
 <div class="top"><div class="wrap"><a class="brand" href="index.html">{LOGO}{SITE_NAME}</a>
-<nav><a href="best.html">Best of</a><a href="index.html">Leagues</a><a href="live.html">Live</a>
+<nav><a href="best.html">Best of</a><a href="index.html">Leagues</a><a href="live.html">Match Day</a>
 <a href="forecast.html">Forecast</a><a href="call.html">Call your shot</a><a href="about.html">About</a>
 <button id="theme" type="button">Dark</button></nav>
 </div></div>
@@ -317,7 +344,49 @@ def _span(c: dict) -> str:
     return f"{c['first']} to {c['last']}" if c.get("first") else "dates unknown"
 
 
-def index_page(model: dict, players_n: int, stamp: str) -> str:
+def avatar(name: str, team: str = "", size: str = "") -> str:
+    """Round initials badge in a colour taken from the team name. A neutral stand-in, not a photo."""
+    parts = [w for w in re.split(r"[\s.-]+", name) if w]
+    initials = (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper() if parts else "?"
+    hue = sum(ord(c) * (i + 3) for i, c in enumerate(team or name)) % 360
+    return f'<span class="av {size}" style="--h:{hue}" aria-hidden="true">{escape(initials)}</span>'
+
+
+KIND_LABEL = {"hattrick": "Hat-trick", "form": "In form", "heavy": "Shot-heavy", "per90": "Per 90",
+              "accuracy": "Accuracy"}
+
+
+def notes_section(notes: list[dict], linked: set) -> str:
+    if not notes:
+        return ""
+    items = []
+    for n in notes:
+        inner = (f'<span class="kind k-{n["kind"]}">{KIND_LABEL[n["kind"]]}</span>'
+                 f'<span class="nt">{escape(n["text"])}</span>')
+        if n["pid"] and (n["league"], n["pid"]) in linked:
+            items.append(f'<a class="note-card" href="{player_url(n["league"], n["pid"])}">{inner}</a>')
+        else:
+            items.append(f'<div class="note-card">{inner}</div>')
+    return (f'<h2>Shot Notes<small>written automatically from the stored matches</small></h2>'
+            f'<div class="notes">{"".join(items)}</div>')
+
+
+def watch_section(watch: list[dict]) -> str:
+    if not watch:
+        return ""
+    cards = []
+    for w in watch:
+        svg, _ = shot_map(w["shots"], mini=True)
+        inner = (f'<div class="wh">{avatar(w["name"], w["team"])}<div><b>{escape(w["name"])}</b>'
+                 f'<span>{escape(w["team"])}</span></div></div><div class="pitch mini">{svg}</div>'
+                 f'<div class="big"><b>{w["sot"]:,}</b><span>shots on target</span>'
+                 f'<b>{w["goals"]:,}</b><span>goals</span></div>')
+        cards.append(f'<a class="wcard" href="{w["url"]}">{inner}</a>')
+    return (f'<h2>Players to watch<small>most shots on target across all stored competitions</small></h2>'
+            f'<div class="wcards">{"".join(cards)}</div>')
+
+
+def index_page(model: dict, players_n: int, stamp: str, notes_html: str = "", watch_html: str = "") -> str:
     leagues = model["leagues"]
     total = sum(v["cov"]["matches"] for v in leagues.values())
     cards = []
@@ -341,6 +410,7 @@ aria-label="Search a player"><div id="results"></div>
 <div class="kpi"><b>{players_n:,}</b><span>players</span></div>
 <div class="kpi"><b>{len(leagues)}</b><span>competitions</span></div>
 <div class="kpi"><b>{escape(stamp[:10])}</b><span>last build (UTC)</span></div></div></section>
+{watch_html}{notes_html}
 <h2>Competitions</h2><div class="cards">{"".join(cards)}</div>
 <h2>Latest results<small>newest matches in the data</small></h2><ul class="results">{results}</ul>
 <p class="note">Leaderboards are per competition on purpose: leagues differ in strength and in how many matches
@@ -418,23 +488,25 @@ _PITCH = (
     '<circle cx="340" cy="110" r="3" fill="var(--pline)"/>')
 
 
-def shot_map(shots: list[dict]) -> tuple[str, int]:
-    """Half-pitch SVG, attacking goal at the top. Returns (svg, number of shots drawn)."""
+def shot_map(shots: list[dict], mini: bool = False) -> tuple[str, int]:
+    """Half-pitch SVG, attacking goal at the top. Returns (svg, number of shots drawn).
+    mini: a tighter crop of the attacking third with larger dots, for cards."""
     dots, drawn = [], 0
     for s in sorted(shots, key=lambda s: s["o"] == "goal"):            # goals last, so they sit on top
         if s["x"] is None:
             continue
         cx, cy = s["y"] / 100 * 680, (100 - s["x"]) / 100 * 1050
-        if cy > 540:                                                 # beyond the halfway line
+        if cy > (400 if mini else 540):                              # beyond the halfway line (or the crop)
             continue
         drawn += 1
         tip = " · ".join(t for t in (f"{s['m']}'" if s["m"] is not None else "", s["d"],
                                      BODY.get(s["b"], ""), SITUATION.get(s["s"], ""),
                                      OUTCOMES.get(s["o"], "")) if t)
-        r = 11 if s["o"] == "goal" else 8
+        r = (18 if s["o"] == "goal" else 13) if mini else (11 if s["o"] == "goal" else 8)
         dots.append(f'<circle class="dot s-{escape(str(s["o"]))}" cx="{cx:.0f}" cy="{cy:.0f}" r="{r}">'
                     f'<title>{escape(tip)}</title></circle>')
-    svg = (f'<svg viewBox="-20 -28 720 580" role="img" aria-label="Shot map">{_PITCH}{"".join(dots)}</svg>')
+    box = "-20 -28 720 450" if mini else "-20 -28 720 580"
+    svg = (f'<svg viewBox="{box}" role="img" aria-label="Shot map">{_PITCH}{"".join(dots)}</svg>')
     return svg, drawn
 
 
@@ -471,10 +543,11 @@ def player_page(lg: str, r: dict, shots: list[dict], ranks: dict, card: bool = F
     body = f"""
 <p class="crumbs"><a href="index.html">Competitions</a> / <a href="{lg}.html">{escape(lname(lg))}</a> /
 {escape(r["player"])}</p>
-<section class="ph"><h1>{escape(r["player"])}</h1>
+<section class="ph phead">{avatar(r["player"], r["team"], "lg")}<div><h1>{escape(r["player"])}</h1>
 <div class="meta"><a href="{team_url(lg, r["team"])}">{escape(r["team"])}</a> · {escape(lname(lg))}</div>
 <span class="badge">Shots on target <b>#{sot_rank}</b> of {size}</span>
-<span class="badge">Goals <b>#{goal_rank}</b> of {size}</span></section>
+<span class="badge">Goals <b>#{goal_rank}</b> of {size}</span></div>
+<div class="herostat"><b>{r["shots_on_target"]:,}</b><span>shots on target</span></div></section>
 <div class="strip">{strip}</div>
 <h2>Shot map<small>attacking goal at the top</small></h2>{mapbox}"""
     url = player_url(lg, r["pid"])
@@ -515,14 +588,17 @@ BEST_TABS = [("sot", "Most on target", "shots_on_target"), ("goals", "Most goals
 LIVE_JS = """
 (function(){
 var box=document.getElementById("live"), meta=document.getElementById("live-meta"), url=box.dataset.src;
-var names=JSON.parse(box.dataset.names);
+var names=JSON.parse(box.dataset.names), fc=JSON.parse(box.dataset.fc||"{}");
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function row(m){
   var live=m.state==="in", done=m.state==="post", t=new Date(m.kickoff);
   var when=live?(m.clock||m.detail):(done?"Full time":t.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}));
   var sc=(live||done)?(m.home_score+" - "+m.away_score):"vs";
+  var f=fc[m.league+":"+m.id], line="";
+  if(f&&f.length){line='<span class="fcl">Forecast, shots on target: '+f.map(function(p){
+    return esc(p.p)+' ('+esc(p.t)+') '+p.x.toFixed(2)}).join(' · ')+'</span>'}
   return '<li class="lv'+(live?' on':'')+'"><span class="d">'+esc(when)+'</span><span class="h">'+esc(m.home)+
-    '</span><b class="sc">'+esc(sc)+'</b><span class="a">'+esc(m.away)+'</span><span class="lg"></span></li>';
+    '</span><b class="sc">'+esc(sc)+'</b><span class="a">'+esc(m.away)+'</span><span class="lg"></span>'+line+'</li>';
 }
 function draw(d){
   var by={};d.matches.forEach(function(m){(by[m.league]=by[m.league]||[]).push(m)});
@@ -542,17 +618,30 @@ load();setInterval(load,60000);
 """
 
 
-def live_page() -> str:
+def matchday_data(fc: dict | None, per_match: int = 3) -> dict:
+    """Top expected shooters per match, keyed 'league:event_id', for the Match Day page."""
+    out: dict[str, list] = {}
+    for p in (fc or {}).get("matchday", []):
+        lst = out.setdefault(f'{p["league"]}:{p["event_id"]}', [])
+        if len(lst) < per_match:
+            lst.append({"p": p["player"], "t": p["team"], "x": p["pred"]})
+    return out
+
+
+def live_page(fc: dict | None = None) -> str:
     repo = os.environ.get("GITHUB_REPOSITORY", "Amir-Mirkazemi/pitchline-live")
     src = f"https://raw.githubusercontent.com/{repo}/live-data/live.json"
     body = f"""
-<section class="ph"><h1>Live scores</h1>
+<section class="ph"><h1>Match Day</h1>
 <div class="meta" id="live-meta">Loading...</div></section>
-<div id="live" data-src="{src}" data-names='{escape(json.dumps(LEAGUE_NAMES), quote=True)}'></div>
+<div id="live" data-src="{src}" data-names='{escape(json.dumps(LEAGUE_NAMES), quote=True)}'
+ data-fc='{escape(json.dumps(matchday_data(fc)), quote=True)}'></div>
 <p class="note">Scores are near-live: a scheduled job checks ESPN about every 15 minutes on match days, so a
-score can be a few minutes behind. Times are shown in your time zone. The page re-reads the file every minute.</p>
+score can be a few minutes behind. Times are shown in your time zone. The page re-reads the file every minute.
+The forecast line is the model's expected shots on target for the likeliest shooters, made before kickoff; how
+those forecasts did is graded on the <a href="forecast.html">Forecast page</a>.</p>
 <script>{LIVE_JS}</script>"""
-    return page(f"Live scores | {SITE_NAME}", body, "Near-live soccer scores for the top competitions.",
+    return page(f"Match Day | {SITE_NAME}", body, "Near-live scores with a shots-on-target forecast for each match.",
                 "live.html", "og-home.png")
 
 
@@ -849,13 +938,23 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
     latest_fc = fcs[-1] if fcs else None
     sc = scorecard(fcs, recs)
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M")
-    files: dict[str, str] = {"style.css": CSS, "app.js": JS, ".nojekyll": "",
-                             "index.html": index_page(model, len(players), stamp),
-                             "method.html": method_page(model, stamp), "about.html": about_page(), "live.html": live_page(), "how.html": how_page(model, stamp),
-                             "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc)}
-    search = []
     linked_all = {(lg, pid) for lg, v in model["leagues"].items() for pid in featured_ids(v["rows"])}
     allrows = combined_rows(players)
+    watch = []
+    for r in sorted(allrows, key=lambda r: (-r["shots_on_target"], r["player"])):
+        key = (r["best_league"], r["best_pid"])
+        if key in linked_all and model["shots"].get(key):
+            watch.append({"name": r["player"], "team": r["team"], "sot": r["shots_on_target"], "goals": r["goals"],
+                          "url": player_url(*key), "shots": model["shots"][key]})
+        if len(watch) == 6:
+            break
+    notes_html = notes_section(shot_notes(recs, players, lname), linked_all)
+    watch_html = watch_section(watch)
+    files: dict[str, str] = {"style.css": CSS, "app.js": JS, ".nojekyll": "",
+                             "index.html": index_page(model, len(players), stamp, notes_html, watch_html),
+                             "method.html": method_page(model, stamp), "about.html": about_page(), "live.html": live_page(latest_fc), "how.html": how_page(model, stamp),
+                             "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc)}
+    search = []
     spans = [c["first"] for c in coverage.values() if c.get("first")] + [c["last"] for c in coverage.values() if c.get("last")]
     files["best.html"] = best_page(allrows, linked_all, f"{min(spans)} to {max(spans)}" if spans else "")
     for lg, v in model["leagues"].items():

@@ -1,4 +1,4 @@
-# Pitchline ⚽
+# Shotcast ⚽
 
 **An end-to-end data pipeline that answers one question: who creates the most dangerous chances in international soccer?**
 
@@ -167,3 +167,10 @@ player shot and chance creation totals across years and updates as matches finis
 - Saudi Pro League data comes from API-Football's free plan (seasons 2022-2024) and has no shot
   locations, so it can only support a Shots on Target ranking, not the Danger ranking.
 - StatsBomb open data is used under its attribution terms. Credit: StatsBomb.
+
+
+## Newest additions
+
+- **Shot Notes**: short stat notes (hat-tricks, form, shot-heavy matches, per-90 and accuracy leaders) written automatically from the stored matches (`notes.py`).
+- **Players to watch**: cards with a generated initials avatar, a mini shot map and big numbers. No photos or club crests are used.
+- **Match Day**: the live scores page now shows the model's pre-match shots-on-target forecast under each fixture.
