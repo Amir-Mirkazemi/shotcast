@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import re
+import zlib
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
@@ -277,14 +278,45 @@ h2 small { font-family:Inter,system-ui,sans-serif; letter-spacing:0; }
 .anim .trail { fill:none; stroke:var(--grey); stroke-width:2; stroke-linecap:round; opacity:0;
   stroke-dasharray:var(--len); stroke-dashoffset:var(--len); animation:fly .5s ease-out forwards; animation-delay:var(--d); }
 .anim .trail.g { stroke:var(--accent); stroke-width:3.5; }
-@keyframes pop { from { opacity:0; transform:scale(0); } to { opacity:.95; transform:scale(1); } }
+@keyframes pop { from { opacity:0; transform:scale(0); } to { opacity:var(--o,.95); transform:scale(1); } }
 @keyframes fly { 0% { opacity:.9; stroke-dashoffset:var(--len); } 60% { opacity:.9; stroke-dashoffset:0; }
   100% { opacity:0; stroke-dashoffset:0; } }
 .wcard { border-radius:16px; } .wcard:hover { transform:none; }
 .wcard .av, .phead .av { box-shadow:0 0 0 3px var(--panel), 0 0 0 5px hsl(var(--h) 52% 36%); }
 @media (max-width:820px) { .stage { padding:40px 0 36px; } .stage-in { grid-template-columns:1fr; gap:28px; }
   .stage p { max-width:none; } .skpis { gap:24px; } .skpi b { font-size:1.9rem; } }
-@media (prefers-reduced-motion:reduce) { .anim .dot { animation:none; opacity:.95; } .anim .trail { display:none; } }
+@media (prefers-reduced-motion:reduce) { .anim .dot { animation:none; opacity:var(--o,.95); } .anim .trail { display:none; } }
+"""
+CSS += """
+/* ---- design pass 2: kit avatars, team-coloured cards, alignment ---- */
+:root { --bg:#f3f5f1; --accent:#0b7d4b; --line:#dfe4dc; --muted:#5d6b62; }
+.av { width:46px; height:46px; display:inline-block; flex:none; background:none; border-radius:0; }
+.av svg { width:100%; height:100%; display:block; filter:drop-shadow(0 2px 3px rgba(0,0,0,.25)); }
+.av.lg { width:84px; height:84px; }
+.wcard .av, .phead .av { box-shadow:none; }
+.wcards { grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:16px; align-items:stretch; }
+.wcard { display:flex; flex-direction:column; gap:12px; padding:16px; border:0; color:#fff;
+  background:linear-gradient(165deg, hsl(var(--h) 46% 26%), hsl(var(--h) 44% 10%)); }
+.wcard:hover { transform:translateY(-3px); }
+.wh .av { width:54px; height:54px; } .wh { margin:0; } .wh b { font-size:1.05rem; color:#fff; } .wh div span { color:rgba(255,255,255,.68); }
+.wcard .pitch.mini { background:rgba(0,0,0,.28); border:0; padding:6px; border-radius:12px; }
+.wcard .turf { fill:rgba(0,0,0,.22); } .wcard .pl { stroke:rgba(255,255,255,.3); }
+.wcard .dot { stroke:rgba(0,0,0,.45); stroke-width:1.5; }
+.wcard .s-goal { fill:#ffd23f; stroke:#fff; stroke-width:2; }
+.wcard .dot:not(.s-goal), .stage .dot:not(.s-goal) { opacity:.78; --o:.78; }
+.big { display:flex; gap:28px; margin-top:auto; padding-top:2px; }
+.big div { display:flex; flex-direction:column; }
+.big b { font-size:2.1rem; line-height:1; color:#ffd23f; font-weight:800; }
+.big span { color:rgba(255,255,255,.7); font-size:.8rem; margin-top:4px; }
+.phead { gap:20px; } .herostat b { color:var(--accent); }
+.stage .av { width:44px; height:44px; }
+.notes { grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); }
+.news-tools { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 18px; }
+.news-tools button { font:inherit; font-size:.85rem; cursor:pointer; padding:5px 14px; border-radius:999px;
+  background:var(--panel); border:1px solid var(--line); color:var(--muted); }
+.news-tools button[aria-pressed="true"] { background:var(--text); color:var(--bg); border-color:var(--text); }
+.news-day { font-size:1rem; margin:30px 0 10px; color:var(--muted); font-weight:600; letter-spacing:0; }
+.more-link { display:inline-block; margin-top:14px; font-weight:600; }
 """
 
 JS += """
@@ -362,7 +394,7 @@ def page(title: str, body: str, desc: str = "", path: str = "", image: str = "")
 <link rel="stylesheet" href="style.css"></head>
 <body>
 <div class="top"><div class="wrap"><a class="brand" href="index.html">{LOGO}{SITE_NAME}</a>
-<nav><a href="best.html">Best of</a><a href="index.html">Leagues</a><a href="live.html">Match Day</a>
+<nav><a href="best.html">Best of</a><a href="index.html">Leagues</a><a href="news.html">News</a><a href="live.html">Match Day</a>
 <a href="forecast.html">Forecast</a><a href="call.html">Call your shot</a><a href="about.html">About</a>
 <button id="theme" type="button">Dark</button></nav>
 </div></div>
@@ -445,12 +477,39 @@ def _span(c: dict) -> str:
     return f"{c['first']} to {c['last']}" if c.get("first") else "dates unknown"
 
 
+def team_hue(name: str, team: str = "") -> int:
+    return sum(ord(c) * (i + 3) for i, c in enumerate(team or name)) % 360
+
+
+_SHIRT = "M21 8 L28 5 Q32 11 36 5 L43 8 L58 19 L51 30 L45 26 V58 H19 V26 L13 30 L6 19 Z"
+
+
 def avatar(name: str, team: str = "", size: str = "") -> str:
-    """Round initials badge in a colour taken from the team name. A neutral stand-in, not a photo."""
+    """A generic football shirt in a colour and pattern taken from the team name, with the player's initials.
+    An illustration, not a likeness of anyone."""
     parts = [w for w in re.split(r"[\s.-]+", name) if w]
     initials = (parts[0][0] + (parts[-1][0] if len(parts) > 1 else "")).upper() if parts else "?"
-    hue = sum(ord(c) * (i + 3) for i, c in enumerate(team or name)) % 360
-    return f'<span class="av {size}" style="--h:{hue}" aria-hidden="true">{escape(initials)}</span>'
+    h = team_hue(name, team)
+    key = zlib.crc32((team or name).encode())
+    pat, cid = key % 4, f"k{key:x}"
+    base, light, dark = f"hsl({h} 58% 38%)", f"hsl({h} 60% 55%)", f"hsl({h} 60% 24%)"
+    if pat == 0:                                        # hoops
+        deco = "".join(f'<rect x="0" y="{y}" width="64" height="6" fill="{light}"/>' for y in range(12, 60, 12))
+    elif pat == 1:                                      # vertical stripes
+        deco = "".join(f'<rect x="{x}" y="0" width="7" height="64" fill="{light}"/>' for x in range(15, 52, 14))
+    elif pat == 2:                                      # sash
+        deco = f'<polygon points="6,8 22,8 64,50 64,64 50,64" fill="{light}" opacity=".9"/>'
+    else:                                               # plain with a chest band
+        deco = f'<rect x="0" y="30" width="64" height="8" fill="{light}" opacity=".55"/>'
+    svg = (f'<svg viewBox="0 0 64 64" role="img" aria-hidden="true"><defs><clipPath id="{cid}">'
+           f'<path d="{_SHIRT}"/></clipPath></defs><path d="{_SHIRT}" fill="{base}"/>'
+           f'<g clip-path="url(#{cid})">{deco}</g>'
+           f'<path d="M13 30 L19 26 V40 L11 36 Z M51 30 L45 26 V40 L53 36 Z" fill="{dark}" opacity=".55"/>'
+           f'<path d="M28 5 Q32 12 36 5 L33 4 Q32 7 31 4 Z" fill="{dark}"/>'
+           f'<text x="32" y="44" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" '
+           f'stroke="{dark}" stroke-width=".8" paint-order="stroke" font-family="Inter,Arial,sans-serif">'
+           f'{escape(initials)}</text></svg>')
+    return f'<span class="av {size}" style="--h:{h}">{svg}</span>'
 
 
 KIND_LABEL = {"hattrick": "Hat-trick", "form": "In form", "heavy": "Shot-heavy", "per90": "Per 90",
@@ -469,7 +528,7 @@ def notes_section(notes: list[dict], linked: set) -> str:
         else:
             items.append(f'<div class="note-card">{inner}</div>')
     return (f'<h2>Shot Notes<small>written automatically from the stored matches</small></h2>'
-            f'<div class="notes">{"".join(items)}</div>')
+            f'<div class="notes">{"".join(items)}</div><a class="more-link" href="news.html">All news</a>')
 
 
 def watch_section(watch: list[dict]) -> str:
@@ -480,11 +539,40 @@ def watch_section(watch: list[dict]) -> str:
         svg, _ = shot_map(w["shots"], mini=True)
         inner = (f'<div class="wh">{avatar(w["name"], w["team"])}<div><b>{escape(w["name"])}</b>'
                  f'<span>{escape(w["team"])}</span></div></div><div class="pitch mini">{svg}</div>'
-                 f'<div class="big"><b>{w["sot"]:,}</b><span>shots on target</span>'
-                 f'<b>{w["goals"]:,}</b><span>goals</span></div>')
-        cards.append(f'<a class="wcard" href="{w["url"]}">{inner}</a>')
+                 f'<div class="big"><div><b>{w["sot"]:,}</b><span>shots on target</span></div>'
+                 f'<div><b>{w["goals"]:,}</b><span>goals</span></div></div>')
+        cards.append(f'<a class="wcard" style="--h:{team_hue(w["name"], w["team"])}" href="{w["url"]}">{inner}</a>')
     return (f'<h2>Players to watch<small>most shots on target across all stored competitions</small></h2>'
             f'<div class="wcards">{"".join(cards)}</div>')
+
+
+def news_page(notes: list[dict], linked: set) -> str:
+    kinds = [k for k in KIND_LABEL if any(n["kind"] == k for n in notes)]
+    tools = ('<div class="news-tools" id="news-tools"><button type="button" data-k="all" aria-pressed="true">All</button>'
+             + "".join(f'<button type="button" data-k="{k}" aria-pressed="false">{KIND_LABEL[k]}</button>' for k in kinds)
+             + "</div>")
+    days: dict[str, list[dict]] = {}
+    for n in sorted(notes, key=lambda n: n["date"], reverse=True):
+        days.setdefault(n["date"], []).append(n)
+    parts = []
+    for d, items in days.items():
+        cards = []
+        for n in items:
+            inner = (f'<span class="kind k-{n["kind"]}">{KIND_LABEL[n["kind"]]}</span><span class="nt">{escape(n["text"])}</span>')
+            href = player_url(n["league"], n["pid"]) if n["pid"] and (n["league"], n["pid"]) in linked else ""
+            cards.append(f'<a class="note-card" data-k="{n["kind"]}" href="{href}">{inner}</a>' if href
+                         else f'<div class="note-card" data-k="{n["kind"]}">{inner}</div>')
+        parts.append(f'<section class="news-day-group"><h3 class="news-day">{d}</h3><div class="notes">{"".join(cards)}</div></section>')
+    js = ("<script>(function(){var t=document.getElementById('news-tools');t.addEventListener('click',function(e){"
+          "var b=e.target.closest('button');if(!b)return;t.querySelectorAll('button').forEach(function(x){"
+          "x.setAttribute('aria-pressed',x===b)});document.querySelectorAll('.note-card').forEach(function(c){"
+          "c.hidden=b.dataset.k!=='all'&&c.dataset.k!==b.dataset.k});document.querySelectorAll('.news-day-group')"
+          ".forEach(function(g){g.hidden=!g.querySelector('.note-card:not([hidden])')})})})()</script>")
+    body = (f'<section class="ph"><h1>News</h1><div class="meta">Stat stories written automatically from the stored '
+            f'matches. No outside articles: every line comes from the data on this site.</div></section>'
+            f'{tools}{"".join(parts) or "<p class=note>No stories yet.</p>"}{js}')
+    return page(f"News | {SITE_NAME}", body, "Automatically written shot and goal stories from the latest matches.",
+                "news.html", "og-home.png")
 
 
 def index_page(model: dict, players_n: int, stamp: str, notes_html: str = "", watch_html: str = "",
@@ -615,7 +703,7 @@ def shot_map(shots: list[dict], mini: bool = False) -> tuple[str, int]:
         tip = " · ".join(t for t in (f"{s['m']}'" if s["m"] is not None else "", s["d"],
                                      BODY.get(s["b"], ""), SITUATION.get(s["s"], ""),
                                      OUTCOMES.get(s["o"], "")) if t)
-        r = (18 if s["o"] == "goal" else 13) if mini else (11 if s["o"] == "goal" else 8)
+        r = (12 if s["o"] == "goal" else 6.5) if mini else (11 if s["o"] == "goal" else 8)
         dots.append(f'<circle class="dot s-{escape(str(s["o"]))}" cx="{cx:.0f}" cy="{cy:.0f}" r="{r}">'
                     f'<title>{escape(tip)}</title></circle>')
     box = "-20 -28 720 450" if mini else "-20 -28 720 580"
@@ -1062,11 +1150,12 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
         if len(watch) == 6:
             break
     notes_html = notes_section(shot_notes(recs, players, lname), linked_all)
+    news_notes = shot_notes(recs, players, lname, limit=60)
     watch_html = watch_section(watch)
     files: dict[str, str] = {"style.css": CSS, "app.js": JS, ".nojekyll": "",
                              "index.html": index_page(model, len(players), stamp, notes_html, watch_html, watch[0] if watch else None),
                              "method.html": method_page(model, stamp), "about.html": about_page(), "live.html": live_page(latest_fc), "how.html": how_page(model, stamp),
-                             "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc)}
+                             "news.html": news_page(news_notes, linked_all), "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc)}
     search = []
     spans = [c["first"] for c in coverage.values() if c.get("first")] + [c["last"] for c in coverage.values() if c.get("last")]
     files["best.html"] = best_page(allrows, linked_all, f"{min(spans)} to {max(spans)}" if spans else "")
