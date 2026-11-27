@@ -15,5 +15,20 @@
 {% else %}
 <p class="note">No located shots are stored for this player yet.</p>
 {% endif %}
+
+{% if form %}
+<h2>Form<small>shots on target per match, with 5- and 10-match averages</small></h2>
+<div class="chartbox"><div class="chart tall" role="img" aria-label="Shots on target per match with rolling averages" data-form='{{ form|tojson }}'></div></div>
+<p class="note">Only matches with a stored lineup are included, so a match where he played without a shot counts as zero. Drag the slider or scroll to move through the matches; click a legend entry to hide a line.</p>
+{% endif %}
+
+{% if career %}
+<h2>Career in the stored data<small>by season, club and competition</small></h2>
+{% if stints|length > 1 %}<p class="note">Clubs, in order: {% for c in stints %}<b>{{ c.team }}</b> ({{ c["from"] }}{% if c["to"] != c["from"] %} to {{ c["to"] }}{% endif %}){% if not loop.last %} → {% endif %}{% endfor %}. Read from the stored matches, so this shows moves within the stored dates, not transfer fees.</p>{% endif %}
+<div class="tablewrap"><table class="sortable"><thead><tr><th>Season</th><th>Club</th><th>Competition</th><th class="n">Apps</th><th class="n opt">Min</th><th class="n">Shots</th><th class="n">On target</th><th class="n">Goals</th><th class="n">Assists</th><th class="n opt">On target / 90</th></tr></thead><tbody>
+{% for c in career %}<tr><td>{{ c.season }}</td><td>{{ c.team }}</td><td>{{ c.league_name }}</td><td class="n">{{ c.apps }}</td><td class="n opt">{{ c.minutes|thousands if c.apps else "-" }}</td><td class="n">{{ c.shots }}</td><td class="n">{{ c.sot }}</td><td class="n">{{ c.goals }}</td><td class="n">{{ c.assists }}</td><td class="n opt">{{ "%.2f"|format(c.sot90) if c.sot90 is not none else "-" }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% if aid %}<p><a class="more-link" href="compare.html?a={{ aid }}">Compare {{ r.player }} with another player</a></p>{% endif %}
 {% endblock %}
-{% block scripts %}{% if charts %}<script src="vendor/echarts.min.js"></script><script src="charts.js"></script>{% endif %}{% endblock %}
+{% block scripts %}{% if charts or form %}<script src="vendor/echarts.min.js"></script><script src="charts.js"></script>{% endif %}{% endblock %}

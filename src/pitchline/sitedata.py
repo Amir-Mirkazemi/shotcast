@@ -86,8 +86,10 @@ def build_model(recs: list[dict], players: dict, coverage: dict) -> dict:
         if len(teams) != 2:
             continue
         (a, b), (sa, sb) = teams, scores
-        leagues[lg]["recent"].append({"date": (rec.get("date") or "")[:10], "home": next(
-            (t["name"] for t in teams if t.get("home")), a["name"]), "teams": teams, "scores": scores})
+        home = next((t["name"] for t in teams if t.get("home")), a["name"])
+        leagues[lg]["recent"].append({"league": lg, "event_id": str(rec["event_id"]),
+                                      "date": (rec.get("date") or "")[:10], "home": home,
+                                      "teams": teams, "scores": scores})
         for me, gf, ga in ((a, sa, sb), (b, sb, sa)):
             t = leagues[lg]["teams"].setdefault(me["name"], {"name": me["name"], "p": 0, "w": 0, "d": 0,
                                                              "l": 0, "gf": 0, "ga": 0})
@@ -120,19 +122,24 @@ def combined_rows(players: dict) -> list[dict]:
     """One row per player across every competition (domestic league, continental cups, World Cup).
 
     Rows are merged by ESPN athlete id. A row without an id is never merged, because two different
-    players can share a name. The team and the home page come from the competition where the player has
-    the most matches."""
-    merged: dict[str, dict] = {}
+    players can share a name. The team is the club of the player's newest stored match, so a player who
+    moved clubs shows the current one; the page link goes to the competition where he played the most
+    matches for that club."""
+    groups: dict[str, list[tuple[str, str, dict]]] = {}
     for (lg, pid), r in players.items():
-        key = r["athlete_id"] or f"{lg}:{pid}"
-        m = merged.setdefault(key, {k: 0 for k in _SUMS} | {"player": r["player"], "team": r["team"],
-                                                           "athlete_id": r["athlete_id"], "leagues": {},
-                                                           "best_league": lg, "best_pid": pid, "_top": -1})
-        for k in _SUMS:
-            m[k] += r[k]
-        m["leagues"][lg] = m["leagues"].get(lg, 0) + r["shots_on_target"]
-        if r["matches"] > m["_top"]:
-            m.update(team=r["team"], best_league=lg, best_pid=pid, _top=r["matches"])
+        groups.setdefault(r["athlete_id"] or f"{lg}:{pid}", []).append((lg, pid, r))
+    merged: dict[str, dict] = {}
+    for key, items in groups.items():
+        newest = max(items, key=lambda t: (t[2].get("last_date", ""), t[2]["matches"]))
+        team = newest[2]["team"]
+        lg, pid, top = max((t for t in items if t[2]["team"] == team), key=lambda t: t[2]["matches"])
+        m = {k: 0 for k in _SUMS} | {"player": top["player"], "team": team, "athlete_id": top["athlete_id"],
+                                     "leagues": {}, "best_league": lg, "best_pid": pid}
+        for lg_, _, r in items:
+            for k in _SUMS:
+                m[k] += r[k]
+            m["leagues"][lg_] = m["leagues"].get(lg_, 0) + r["shots_on_target"]
+        merged[key] = m
     rows = list(merged.values())
     for m in rows:
         ok = m["lineup_matches"] and m["minutes"] >= MIN_MINUTES_BEST

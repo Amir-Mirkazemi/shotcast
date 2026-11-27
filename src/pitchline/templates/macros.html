@@ -5,7 +5,7 @@
 {% macro results(items, show_league=False) %}
 <ul class="results">
 {% for m in items %}
-<li><span class="d">{{ m.date }}</span><span class="h">{{ m.home }}</span><span class="sc">{{ m.hs }}–{{ m.as_ }}</span><span class="a">{{ m.away }}</span>{% if show_league %}<span class="lg">{{ m.league }}</span>{% endif %}</li>
+<li><span class="d">{{ m.date }}</span><span class="h">{{ m.home }}</span>{% if m.url %}<a class="sc" href="{{ m.url }}" aria-label="Match report: {{ m.home }} {{ m.hs }}-{{ m.as_ }} {{ m.away }}">{{ m.hs }}–{{ m.as_ }}</a>{% else %}<span class="sc">{{ m.hs }}–{{ m.as_ }}</span>{% endif %}<span class="a">{{ m.away }}</span>{% if show_league %}<span class="lg">{{ m.league }}</span>{% endif %}</li>
 {% endfor %}
 </ul>
 {% endmacro %}

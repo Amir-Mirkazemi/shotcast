@@ -24,7 +24,8 @@ def _new_row(lg: str, name: str, team: str, athlete_id: str = "") -> dict:
             "shots": 0, "shots_on_target": 0, "goals": 0, "assists": 0, "apps": 0, "minutes": 0,
             "lineup_matches": 0,
             # the same stats, but only over matches where the player's minutes are known (for per-90 rates)
-            "lc_shots": 0, "lc_sot": 0, "lc_goals": 0, "lc_assists": 0}
+            "lc_shots": 0, "lc_sot": 0, "lc_goals": 0, "lc_assists": 0,
+            "last_date": ""}        # newest stored match date: used to find a player's current club
 
 
 def read_records(store: Store, league: str | None = None, workers: int = 16) -> list[dict]:
@@ -74,7 +75,8 @@ def totals_from_records(recs: list[dict]) -> tuple[dict, dict]:
             who = pid(lg, p)
             row = players.setdefault((lg, who),
                                      _new_row(lg, p["player"], p["team"], p.get("athlete_id", "")))
-            row["team"] = p["team"]
+            if d >= row["last_date"]:
+                row["team"], row["last_date"] = p["team"], d       # newest match wins, any file order
             row["matches"] += 1
             for k in ("shots", "shots_on_target", "goals", "assists"):
                 row[k] += int(p.get(k) or 0)

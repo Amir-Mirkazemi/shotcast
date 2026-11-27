@@ -108,6 +108,23 @@ def test_combined_rows_merge_by_athlete_id_only():
     assert len(rows) == 3                                                       # id 7, id 8, and the name-only row
 
 
+def test_combined_row_uses_the_club_of_the_newest_match():
+    from pitchline.leaderboard import totals_from_records
+    from pitchline.sitedata import combined_rows
+
+    def rec(lg, eid, date, team, aid="9"):
+        return {"league": lg, "event_id": eid, "date": date, "coverage": "ok",
+                "players": [_p(team, "Kylian", 4, 2, aid=aid)], "lineup": [], "shots": [], "teams": []}
+    # five seasons in France, then a move to Spain: the current club is the Spanish one even though
+    # France has more matches, and the page link points at the Spanish competition
+    recs = [rec("fra.1", str(i), f"2023-0{i + 1}-01", "Paris SG") for i in range(5)]
+    recs += [rec("esp.1", "9", "2025-09-01", "Real Madrid"), rec("esp.1", "10", "2025-09-08", "Real Madrid")]
+    players, _ = totals_from_records(recs[::-1])             # order of the records must not matter
+    row = combined_rows(players)[0]
+    assert row["team"] == "Real Madrid" and row["best_league"] == "esp.1"
+    assert row["shots_on_target"] == 14 and set(row["leagues"]) == {"fra.1", "esp.1"}
+
+
 def test_build_includes_new_pages_and_links(tmp_path):
     import json
 

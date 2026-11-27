@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+{{ m.head("Compare players", "#38bdf8", "Two players side by side: totals, accuracy and shot maps") }}
+<div class="cmp-pick" id="cmp-pick">
+  {% for slot, label in (("a", "First player"), ("b", "Second player")) %}
+  <div class="cmp-slot"><label for="cmp-{{ slot }}">{{ label }}</label>
+    <div class="hsearch"><input class="search" id="cmp-{{ slot }}" data-cmp="{{ slot }}" type="search" placeholder="Type a name" autocomplete="off" aria-label="{{ label }}"><div class="sdrop" id="cmp-drop-{{ slot }}" role="listbox" style="right:auto;left:0"></div></div></div>
+  {% endfor %}
+</div>
+<div id="cmp" aria-live="polite"><p class="note">Pick two players to compare. Only players who have a profile page can be compared. The shot map shows each player's matches in the competition of his profile.</p></div>
+<p class="note">Totals add up every competition stored for the player. Accuracy is shots on target divided by shots. Per-90 needs at least 1,800 known minutes. Players in different leagues are not adjusted for league strength.</p>
+{% endblock %}
+{% block scripts %}<script src="compare.js"></script>{% endblock %}

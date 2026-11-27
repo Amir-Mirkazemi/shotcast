@@ -207,3 +207,14 @@ synthetic sample would show made-up numbers next to real player names, so none a
   automatically from the stored matches (`notes.py`), with competition, story-type and date filters.
 - **Players to watch**: cards with a club-colour shirt avatar, a mini shot map and big numbers.
 - **Match Day**: live scores with the model's pre-match shots-on-target forecast under each fixture.
+
+### Site features
+
+| Feature | Where | How it works |
+|---|---|---|
+| Player comparison | `compare.html` | `compare.json` (index) + `shots/{id}.json`, all built at publish time; the pair lives in the URL |
+| Season and team filters | competition pages | `data/{league}.json` holds per-season, per-team rows; `league.js` re-aggregates in the browser |
+| Player profile | `p-*.html` | rolling 5- and 10-match form, career by season, club and competition, club stints read from stored matches |
+| Match report | `m-*.html` | result, team totals, shot maps, per-player table; forecast vs actual when a forecast was saved before kickoff |
+
+Season boundaries roll over on 1 July. Club stints come from the stored match files, so they show moves inside the stored dates, not transfers. A player's current club is the team in his newest stored match.

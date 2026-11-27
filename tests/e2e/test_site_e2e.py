@@ -159,7 +159,58 @@ def test_news_filters_partition_the_feed(page):
 def test_player_page_charts_render(page):
     page.goto(page.base + "/p-eng.1-11.html")
     expect(page.locator(".chart svg").first).to_be_visible()
-    assert page.locator(".chart").count() == 3
+    assert page.locator(".chart").count() == 4          # three bar charts + the rolling form chart
+    assert page.errors == []
+
+
+def test_player_page_shows_form_career_and_compare_link(page):
+    page.goto(page.base + "/p-eng.1-11.html")
+    expect(page.locator(".chart[data-form] svg")).to_be_visible()
+    expect(page.get_by_role("heading", name="Career in the stored data")).to_be_visible()
+    expect(page.locator("table", has_text="2025-26").first).to_be_visible()
+    page.get_by_role("link", name="Compare Bukayo Saka with another player").click()
+    expect(page.locator("#cmp-a")).to_have_value("Bukayo Saka")
+
+
+def test_compare_two_players_side_by_side(page):
+    page.goto(page.base + "/compare.html")
+    page.locator("#cmp-a").fill("saka")
+    page.locator("#cmp-drop-a a", has_text="Bukayo Saka").click()
+    page.locator("#cmp-b").fill("palmer")
+    page.locator("#cmp-drop-b a", has_text="Cole Palmer").click()
+    expect(page.locator(".cmp-table")).to_contain_text("On target")
+    expect(page.locator(".cmp-head")).to_have_count(2)
+    expect(page.locator("#map-a svg circle").first).to_be_visible()
+    expect(page.locator("#map-b svg circle").first).to_be_visible()
+    assert "a=11" in page.url and "b=22" in page.url
+    page.reload()                                         # the pair survives a reload because it lives in the URL
+    expect(page.locator(".cmp-head")).to_have_count(2)
+    assert page.errors == []
+
+
+def test_league_filters_narrow_the_board_and_reset(page):
+    page.goto(page.base + "/eng.1.html")
+    expect(page.locator("#filters")).to_be_visible()
+    assert page.locator("#fl-season option").count() >= 2
+    page.select_option("#fl-team", "Arsenal")
+    expect(page.locator("#filtered")).to_be_visible()
+    expect(page.locator("#filtered tbody tr")).to_have_count(1)
+    expect(page.locator("#filtered")).to_contain_text("Bukayo Saka")
+    page.get_by_role("button", name="Goals", exact=True).click()
+    expect(page.locator("#fl-note")).to_contain_text("Goals")
+    page.get_by_role("button", name="Reset filters").click()
+    expect(page.locator("#filtered")).to_be_hidden()
+    expect(page.locator("#t-goals")).to_be_visible()
+    assert page.errors == []
+
+
+def test_score_links_to_a_match_report(page):
+    page.goto(page.base + "/eng.1.html")
+    link = page.locator("a.sc").first
+    expect(link).to_be_visible()
+    link.click()
+    expect(page.locator(".scoreboard")).to_contain_text("Arsenal")
+    expect(page.locator("table").first).to_contain_text("Bukayo Saka")
     assert page.errors == []
 
 
@@ -173,7 +224,7 @@ def test_mobile_menu_opens_and_navigates(phone):
 
 
 def test_no_horizontal_scroll_on_mobile(phone):
-    for path in ("/index.html", "/eng.1.html", "/p-eng.1-11.html", "/forecast.html", "/news.html"):
+    for path in ("/index.html", "/eng.1.html", "/p-eng.1-11.html", "/forecast.html", "/news.html", "/compare.html?a=11&b=22"):
         phone.goto(phone.base + path)
         assert phone.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), path
 

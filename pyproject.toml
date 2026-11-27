@@ -26,4 +26,5 @@ select = ["E", "F", "I", "B"]
 "src/pitchline/site.py" = ["E501"]   # club colour table and SVG strings
 "src/pitchline/forecast.py" = ["E501"]
 "src/pitchline/notes.py" = ["E501"]
+"src/pitchline/insights.py" = ["E501"]
 "tests/test_notes.py" = ["E501"]

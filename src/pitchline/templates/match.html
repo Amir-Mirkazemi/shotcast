@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+{% set a = sides[0] %}{% set b = sides[1] %}
+<p class="crumbs"><a href="index.html">Competitions</a> / <a href="{{ lg }}.html">{{ league_name }}</a> / {{ a.name }} v {{ b.name }}</p>
+<section class="ph" style="--kc:#10b981"><div class="meta">{{ league_name }} · {{ v.date }}</div>
+<div class="scoreboard"><span class="sb-team">{{ a.name }}</span><b class="sb-score">{{ a.score }}–{{ b.score }}</b><span class="sb-team">{{ b.name }}</span></div></section>
+{% if a.total_shots or b.total_shots or v.graded %}<div class="strip">
+  {% if a.total_shots or b.total_shots %}<div class="kpi"><b>{{ a.total_shots or 0 }} – {{ b.total_shots or 0 }}</b><span>Shots</span></div>{% endif %}
+  {% if a.on_target or b.on_target %}<div class="kpi"><b>{{ a.on_target or 0 }} – {{ b.on_target or 0 }}</b><span>On target</span></div>{% endif %}
+  {% if v.graded %}<div class="kpi"><b>{{ v.graded.pred }} v {{ v.graded.actual }}</b><span>Forecast v actual on target ({{ v.graded.n }} players)</span></div>{% endif %}
+</div>{% endif %}
+{% for s in sides %}
+<h2>{{ s.name }}{% if s.shots %}<small>{{ s.shots|length }} located shots</small>{% endif %}</h2>
+<div class="mapbox{% if not s.shots %} nomap{% endif %}">{% if s.shots %}<div><div class="pitch">{{ s.svg }}</div>
+  <div class="legend"><span><i style="background:var(--accent-hi)"></i>Goal</span><span><i style="background:var(--blue)"></i>Saved</span><span><i style="background:var(--amber)"></i>Woodwork</span><span><i style="background:var(--red)"></i>Off target</span><span><i style="background:var(--grey)"></i>Blocked</span></div></div>{% endif %}
+  <div class="tablewrap"><table><thead><tr><th>Player</th><th class="n opt">Min</th><th class="n">Shots</th><th class="n">On target</th><th class="n">Goals</th>{% if has_pred %}<th class="n">Forecast</th>{% endif %}</tr></thead><tbody>
+  {% for p in s.players %}<tr><td class="who">{{ p.name }}</td><td class="n opt">{{ p.minutes if p.minutes is not none else "-" }}</td><td class="n">{{ p.shots }}</td><td class="n">{{ p.sot }}</td><td class="n">{{ p.goals }}</td>{% if has_pred %}<td class="n">{{ fmt(p.pred) if p.pred is not none else "-" }}</td>{% endif %}</tr>
+  {% else %}<tr><td colspan="6" class="note">No player statistics stored for this team.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+{% endfor %}
+{% if v.missing %}<p class="note">Forecast players with no shots in this match (counted as 0 when grading): {% for x in v.missing %}{{ x.name }} ({{ fmt(x.pred) }}){% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+{% if has_pred %}<p class="note">Forecasts were saved before kickoff and are graded on the <a href="forecast.html">Forecast page</a>, including when they miss.</p>{% else %}<p class="note">No forecast was saved before this match, so only the result is shown.</p>{% endif %}
+{% endblock %}

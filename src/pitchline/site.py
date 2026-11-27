@@ -13,7 +13,7 @@ import os
 import re
 import shutil
 import zlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
 
@@ -22,6 +22,15 @@ from markupsafe import Markup
 
 from . import cards
 from .forecast import load_forecasts, scorecard
+from .insights import (
+    career_table,
+    club_stints,
+    form_chart,
+    latest_predictions,
+    match_view,
+    player_history,
+    season_rows,
+)
 from .leaderboard import read_records, totals_from_records
 from .notes import shot_notes
 from .sitedata import (
@@ -59,9 +68,16 @@ LEAGUE_NAMES = {
 }
 KIND_LABEL = {"hattrick": "Hat-trick", "form": "In form", "heavy": "Shot-heavy", "per90": "Per 90",
               "accuracy": "Accuracy"}
-NAV = (("best", "Best of", "trophy", "best.html"), ("leagues", "Leagues", "users", "index.html"),
+NAV = (("best", "Best", "trophy", "best.html"), ("leagues", "Leagues", "users", "index.html"),
        ("news", "News", "newspaper", "news.html"), ("live", "Match Day", "radio", "live.html"),
-       ("forecast", "Forecast", "trending-up", "forecast.html"), ("call", "Call your shot", "target", "call.html"))
+       ("forecast", "Forecast", "trending-up", "forecast.html"), ("compare", "Compare", "git-compare", "compare.html"),
+       ("call", "Picks", "target", "call.html"))
+MATCH_DAYS = 21          # matches this recent get their own page (older ones only if a forecast exists for them)
+_MATCH_URLS: dict[tuple[str, str], str] = {}      # (league, event id) -> page, filled by build()
+
+
+def match_url(lg: str, eid: str) -> str:
+    return f"m-{lg}-{slug(str(eid))}.html"
 
 
 def lname(slug_: str) -> str:
@@ -283,7 +299,8 @@ def board_data(rows: list[dict], key: str, cols: list, linked: set, lg: str, n: 
 
 def result_item(m: dict, league: str = "") -> dict:
     (h, hs), (a, as_) = sorted(zip(m["teams"], m["scores"], strict=True), key=lambda p: not p[0].get("home"))
-    return {"date": m["date"], "home": h["name"], "away": a["name"], "hs": hs, "as_": as_, "league": league}
+    return {"date": m["date"], "home": h["name"], "away": a["name"], "hs": hs, "as_": as_, "league": league,
+            "url": _MATCH_URLS.get((m.get("league"), m.get("event_id")), "")}
 
 
 def _span(c: dict) -> str:
@@ -324,7 +341,7 @@ def league_page(lg: str, v: dict, linked: set, n: int) -> str:
     return render("league.html", title=f"{lname(lg)} leaderboards | {SITE_NAME}",
                   desc=f"Shots on target, goals and assists leaders in the {lname(lg)}.", path=f"{lg}.html",
                   image=f"og-{lg}.png", page_id="leagues", lg=lg, name=lname(lg), color=LEAGUE_COLOR.get(lg, "#1d2f55"),
-                  cov=v["cov"], span=_span(v["cov"]), boards=boards, n=n, teams=teams,
+                  cov=v["cov"], span=_span(v["cov"]), boards=boards, n=n, teams=teams, filter_data=f"data/{lg}.json",
                   results=[result_item(m) for m in v["recent"][:10]])
 
 
@@ -339,7 +356,8 @@ def team_page(lg: str, t: dict, v: dict, linked: set) -> str:
                   color=card_color(t["name"]), players=players, results=[result_item(m) for m in games])
 
 
-def player_page(lg: str, r: dict, shots: list[dict], ranks: dict, card: bool = False) -> str:
+def player_page(lg: str, r: dict, shots: list[dict], ranks: dict, card: bool = False,
+                form: dict | None = None, career: list[dict] | None = None, stints: list[dict] | None = None) -> str:
     kpis = [("Apps", _cell(r, "apps")), ("Minutes", _cell(r, "minutes")), ("Shots", r["shots"]),
             ("On target", r["shots_on_target"]), ("Goals", r["goals"]), ("Assists", r["assists"]),
             ("On target / 90", _cell(r, "sot90"))]
@@ -363,7 +381,25 @@ def player_page(lg: str, r: dict, shots: list[dict], ranks: dict, card: bool = F
                   charts=[("Outcome", counts("o", OUTCOMES)), ("Body part", counts("b", BODY)),
                           ("Situation", counts("s", SITUATION))] if shots else [],
                   legend=[("goal", "accent-hi"), ("saved", "blue"), ("woodwork", "amber"), ("off_target", "red"),
-                          ("blocked", "grey")], OUTCOMES=OUTCOMES)
+                          ("blocked", "grey")], OUTCOMES=OUTCOMES, form=form,
+                  career=[{**c, "league_name": lname(c["league"])} for c in career or []], stints=stints or [],
+                  aid=r["athlete_id"])
+
+
+def compare_page() -> str:
+    return render("compare.html", title=f"Compare players | {SITE_NAME}",
+                  desc="Put two players side by side: totals, shooting accuracy and shot maps.", path="compare.html",
+                  image="og-home.png", page_id="compare")
+
+
+def match_page(view: dict) -> str:
+    sides = [{**s, "svg": Markup(shot_map(s["shots"])[0]), "drawn": shot_map(s["shots"])[1]} for s in view["sides"]]
+    a, b = sides
+    return render("match.html", title=f"{a['name']} v {b['name']} | {lname(view['league'])} | {SITE_NAME}",
+                  desc=f"{a['name']} {a['score']}-{b['score']} {b['name']}: shots, shot maps and forecast versus actual.",
+                  path=match_url(view["league"], view["event_id"]), image="og-home.png", page_id="leagues",
+                  v=view, sides=sides, league_name=lname(view["league"]), lg=view["league"],
+                  has_pred=any(p["pred"] is not None for s in sides for p in s["players"]))
 
 
 def news_page(notes: list[dict], linked: set) -> str:
@@ -477,6 +513,42 @@ def _copy_static(out: Path) -> list[Path]:
     return made
 
 
+def _match_pages(recs: list[dict], preds: dict) -> dict[str, str]:
+    """Pages for recent matches, and for any older match that has a saved forecast to compare with."""
+    _MATCH_URLS.clear()
+    newest = max(((r.get("date") or "")[:10] for r in recs), default="")
+    cutoff = ""
+    if newest:
+        y, m, d = (int(x) for x in newest.split("-"))
+        cutoff = (datetime(y, m, d) - timedelta(days=MATCH_DAYS)).strftime("%Y-%m-%d")
+    chosen = [r for r in recs if (r.get("date") or "")[:10] >= cutoff or (r["league"], str(r["event_id"])) in preds]
+    views = {}
+    for r in chosen:
+        v = match_view(r, preds.get((r["league"], str(r["event_id"]))))
+        if v:
+            views[(r["league"], str(r["event_id"]))] = v
+            _MATCH_URLS[(r["league"], str(r["event_id"]))] = match_url(r["league"], r["event_id"])
+    return {match_url(lg, eid): match_page(v) for (lg, eid), v in views.items()}
+
+
+def _compare_files(allrows: list[dict], linked: set, model: dict, career: dict) -> dict[str, str]:
+    """compare.json (one entry per player with a page) and one small shots file per player, loaded on demand."""
+    index, files = [], {}
+    for r in allrows:
+        key = (r["best_league"], r["best_pid"])
+        aid = r["athlete_id"]
+        if key not in linked or not aid:
+            continue
+        index.append({"id": aid, "name": r["player"], "team": r["team"], "color": card_color(r["team"], r["player"]),
+                      "url": player_url(*key), "comp": lname(key[0]), "apps": r["apps"], "min": r["minutes"],
+                      "shots": r["shots"], "sot": r["shots_on_target"], "goals": r["goals"], "assists": r["assists"],
+                      "sot90": None if r["sot90"] is None else round(r["sot90"], 2),
+                      "kit": list(kit(r["team"], r["player"]))})
+        files[f"shots/{aid}.json"] = json.dumps(model["shots"].get(key, []), separators=(",", ":"))
+    files["compare.json"] = json.dumps(index, separators=(",", ":"), ensure_ascii=False)
+    return files
+
+
 def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 50) -> list[Path]:
     recs = read_records(store)
     players, coverage = totals_from_records(recs)
@@ -498,12 +570,17 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
         if len(watch) == 6:
             break
     home_notes = notes_view(shot_notes(recs, players, lname), linked_all)
+    series, career = player_history(recs)
+    preds = latest_predictions(fcs)
+    match_files = _match_pages(recs, preds)
     files: dict[str, str] = {
         ".nojekyll": "",
         "index.html": index_page(model, len(players), stamp, home_notes, watch),
         "method.html": method_page(model, stamp), "about.html": about_page(), "live.html": live_page(latest_fc),
         "how.html": how_page(model, stamp), "news.html": news_page(shot_notes(recs, players, lname, limit=60), linked_all),
-        "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc)}
+        "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc), "compare.html": compare_page()}
+    files.update(match_files)
+    files.update(_compare_files(allrows, linked_all, model, career))
     search = []
     spans = ([c["first"] for c in coverage.values() if c.get("first")]
              + [c["last"] for c in coverage.values() if c.get("last")])
@@ -511,12 +588,17 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
     for lg, v in model["leagues"].items():
         linked = featured_ids(v["rows"])
         files[f"{lg}.html"] = league_page(lg, v, linked, top_n)
+        files[f"data/{lg}.json"] = json.dumps(season_rows(career, lg, linked), separators=(",", ":"), ensure_ascii=False)
         ranks = {"sot": rank_map(v["rows"], ("shots_on_target", "shots")),
                  "goals": rank_map(v["rows"], ("goals", "shots_on_target")), "size": len(v["rows"])}
         for r in v["rows"]:
             if r["pid"] in linked:
+                aid = r["athlete_id"]
                 files[player_url(lg, r["pid"])] = player_page(
-                    lg, r, model["shots"].get((lg, r["pid"]), []), ranks, card=cards.available())
+                    lg, r, model["shots"].get((lg, r["pid"]), []), ranks, card=cards.available(),
+                    form=form_chart(series.get(aid, [])) if aid else None,
+                    career=career_table(career[aid]) if aid in career else None,
+                    stints=club_stints(career[aid]) if aid in career else None)
             search.append({"player": r["player"], "team": r["team"], "league": lg, "league_name": lname(lg),
                            "url": player_url(lg, r["pid"]) if r["pid"] in linked else "",
                            "rank": ranks["sot"][r["pid"]], "field": len(v["rows"]), "shots": r["shots"],
@@ -529,6 +611,7 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
     paths = _copy_static(out)
     for name, text in files.items():
         path = out / name
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         paths.append(path)
     if cards.available():
