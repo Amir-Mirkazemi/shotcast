@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+{{ m.head("Best of the best", "#fbbf24", "Top 10 across every competition stored · " ~ span) }}
+<div class="tabs">{% for b in boards %}<button type="button" data-tab="b-{{ b.id }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ b.label }}</button>{% endfor %}</div>
+{% for b in boards %}
+<div class="panel" id="b-{{ b.id }}"{% if not loop.first %} hidden{% endif %}>
+{% if not b.rows %}<p class="note">Not enough minutes data yet. This board needs players with at least {{ min_minutes|thousands }} minutes across matches that have stored lineups.</p>
+{% else %}
+<div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th><th class="n opt">Min</th><th class="n">On target</th><th class="n">Goals</th><th class="n">{{ "Per 90" if b.per90 else "Ranked by" }}</th></tr></thead><tbody>
+{% for r in b.rows %}
+<tr><td class="rk">{{ r.rank }}</td><td class="who">{{ m.player_link(r.name, r.url) }}<small>{{ r.team }} · {{ r.comps }}</small></td><td class="n opt">{{ r.minutes|thousands }}</td><td class="n">{{ r.sot|thousands }}</td><td class="n">{{ r.goals|thousands }}</td><td class="n hl"><i style="--w:{{ r.w }}%"></i><b>{{ r.value }}</b></td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+</div>
+{% endfor %}
+<p class="note">Each player is counted once, with matches added up across all competitions (league, Champions League, World Cup and so on) using ESPN's player id. These numbers are not adjusted for league strength, minutes played or team style, so a striker in a weaker league is not directly comparable to one in a stronger league. Per-90 needs at least {{ min_minutes|thousands }} known minutes. Rankings cover only the matches stored on this site.</p>
+{% endblock %}

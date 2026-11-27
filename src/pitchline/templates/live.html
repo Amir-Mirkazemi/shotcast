@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+<section class="ph" style="--kc:#10b981"><h1>Match Day</h1><div class="meta" id="live-meta" aria-live="polite">Loading...</div></section>
+<div id="live" data-src="{{ src }}" data-names='{{ names|tojson }}' data-fc='{{ fc|tojson }}'></div>
+<p class="note">Scores are near-live: a scheduled job checks ESPN about every 15 minutes on match days, so a score can be a few minutes behind. Times are shown in your time zone. The page re-reads the file every minute. The forecast line is the model's expected shots on target for the likeliest shooters, made before kickoff; how those forecasts did is graded on the <a href="forecast.html">Forecast page</a>.</p>
+{% endblock %}
+{% block scripts %}<script src="live.js"></script>{% endblock %}

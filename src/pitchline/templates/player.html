@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block body %}
+<p class="crumbs"><a href="index.html">Competitions</a> / <a href="{{ lg }}.html">{{ league_name }}</a> / {{ r.player }}</p>
+<section class="ph phead" style="--kc:{{ color }}">{{ avatar(r.player, r.team, "lg") }}
+  <div><h1>{{ r.player }}</h1><div class="meta"><a href="{{ team_link }}">{{ r.team }}</a> · {{ league_name }}</div>
+    <span class="badge">Shots on target <b>#{{ sot_rank }}</b> of {{ size }}</span><span class="badge">Goals <b>#{{ goal_rank }}</b> of {{ size }}</span></div>
+  <div class="herostat"><b>{{ r.shots_on_target|thousands }}</b><span>shots on target</span></div></section>
+<div class="strip">{% for k, v in kpis %}<div class="kpi"><b>{{ v }}</b><span>{{ k }}</span></div>{% endfor %}</div>
+<h2>Shot map<small>attacking goal at the top</small></h2>
+{% if charts %}
+<div class="mapbox"><div><div class="pitch">{{ svg }}</div>
+  <div class="legend">{% for k, c in legend %}<span><i style="background:var(--{{ c }})"></i>{{ OUTCOMES[k] }}</span>{% endfor %}</div></div>
+  <div class="chartbox">{% for title, items in charts %}<h3>{{ title }}</h3><div class="chart" role="img" aria-label="{{ title }} breakdown" data-items='{{ items|tojson }}'></div>{% endfor %}</div></div>
+<p class="note">{{ drawn }} of {{ n_shots }} parsed shots have a usable location and lie in the attacking half. The outcome, body-part and situation counts come from the parsed commentary, so they can differ slightly from the totals above, which are ESPN's own player statistics (ESPN counts some blocked shots as on target).</p>
+{% else %}
+<p class="note">No located shots are stored for this player yet.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% if charts %}<script src="vendor/echarts.min.js"></script><script src="charts.js"></script>{% endif %}{% endblock %}

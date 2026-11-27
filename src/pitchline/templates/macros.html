@@ -1,0 +1,31 @@
+{% macro head(title, color, meta="") %}
+<section class="ph" style="--kc:{{ color }}"><h1>{{ title }}</h1>{% if meta %}<div class="meta">{{ meta }}</div>{% endif %}</section>
+{% endmacro %}
+
+{% macro results(items, show_league=False) %}
+<ul class="results">
+{% for m in items %}
+<li><span class="d">{{ m.date }}</span><span class="h">{{ m.home }}</span><span class="sc">{{ m.hs }}–{{ m.as_ }}</span><span class="a">{{ m.away }}</span>{% if show_league %}<span class="lg">{{ m.league }}</span>{% endif %}</li>
+{% endfor %}
+</ul>
+{% endmacro %}
+
+{% macro player_link(name, url) %}{% if url %}<a href="{{ url }}">{{ name }}</a>{% else %}{{ name }}{% endif %}{% endmacro %}
+
+{% macro board(b) %}
+{% if not b.rows %}
+<p class="note">Not enough minutes data yet: this board needs players with at least {{ b.min_minutes }} minutes across matches that have stored lineups.</p>
+{% else %}
+<div class="tablewrap"><table class="sortable"><thead><tr><th class="n">#</th><th>Player</th>{% for lab, cls in b.head %}<th class="n {{ cls }}">{{ lab }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for r in b.rows %}
+<tr><td class="rk">{{ r.rank }}</td><td class="who">{{ player_link(r.name, r.url) }}<small>{{ r.team }}</small></td>
+{% for c in r.cells %}{% if c.hl %}<td class="n hl"><i style="--w:{{ c.w }}%"></i><b>{{ c.text }}</b></td>{% else %}<td class="n {{ c.cls }}">{{ c.text }}</td>{% endif %}{% endfor %}</tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endmacro %}
+
+{% macro tabs(prefix, items) %}
+<div class="tabs" role="tablist">{% for t in items %}<button type="button" data-tab="{{ prefix }}-{{ t.id }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ t.label }}</button>{% endfor %}</div>
+{% endmacro %}

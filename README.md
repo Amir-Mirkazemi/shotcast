@@ -96,11 +96,11 @@ The DAG `pitchline_daily` runs `ingest_raw -> build_bronze -> dbt_build -> dbt_s
 
 ```
 config/            which competitions to load
-src/pitchline/     ingest, bronze (Parquet), storage (local/S3), health, CLI
+src/pitchline/     ingest, bronze (Parquet), storage (local/S3), health, CLI, site.py + templates/ + static/ (website)
 dbt/               staging -> intermediate -> marts, generic + singular tests
 orchestration/     Airflow DAG, Dockerfile, docker-compose
 app/               Streamlit app
-tests/             unit tests (ingest retries, idempotency, S3 via moto, bronze, DAG shape, app smoke)
+tests/             unit tests (ingest retries, idempotency, S3 via moto, bronze, DAG shape, app smoke); tests/e2e = Playwright
 .github/workflows/ CI: lint, tests, sample pipeline with all dbt tests, DAG import check
 ```
 
@@ -169,8 +169,41 @@ player shot and chance creation totals across years and updates as matches finis
 - StatsBomb open data is used under its attribution terms. Credit: StatsBomb.
 
 
+## Website architecture
+
+The site is static files on GitHub Pages: no server, no database, no framework. It is rebuilt after every nightly run.
+
+```
+S3 (one JSON per match) -> site.py (prepares data) -> Jinja2 templates -> static HTML
+                                                  \-> static/ (style.css, app.js, charts.js, fonts, icons)
+```
+
+| Concern | Choice | Why |
+|---|---|---|
+| Markup | Jinja2 templates in `src/pitchline/templates/` | HTML lives in templates; `site.py` only prepares plain data (dicts and lists) |
+| Styling | One `style.css`, navy and emerald theme, light mode via a toggle | No build step, no CSS framework |
+| Type and icons | Inter (self-hosted) and a Lucide SVG sprite | No third-party requests at runtime |
+| Charts | Apache ECharts (self-hosted, loaded only on player pages) for breakdowns; hand-built SVG for shot maps | Interactive tooltips where it helps, crisp SVG where positions matter |
+| Behaviour | Small vanilla JS files, one per page that needs it | `app.js` is 2.6 KB gzipped |
+| Tests | Pytest for the data, Playwright for the browser (`tests/e2e`) | Search, theme, tabs, news filters, charts, mobile menu, no horizontal scroll |
+
+Frontend budget (gzipped): `style.css` 5.2 KB, `app.js` 2.6 KB, Inter 48 KB, ECharts 334 KB on player pages only.
+
+Engineering decisions worth knowing:
+- Shot-map dots, avatars (a generic shirt in the club's main colours) and stat notes are generated from data. No
+  player photos, crests or sponsor logos are used.
+- Fonts, icons and charts are vendored so a page view sends nothing to a third party.
+- News stories are computed from the stored matches with plain statistics, not written by a language model.
+- The browser tests caught a real bug (the `hidden` attribute losing to a `display` rule), which is why they exist.
+
+Run the browser tests locally: `pip install playwright && playwright install chromium && pytest tests/e2e`.
+
+To add screenshots: open the deployed site, save images into `docs/img/` and reference them here. (Screenshots of a
+synthetic sample would show made-up numbers next to real player names, so none are committed.)
+
 ## Newest additions
 
-- **Shot Notes**: short stat notes (hat-tricks, form, shot-heavy matches, per-90 and accuracy leaders) written automatically from the stored matches (`notes.py`).
-- **Players to watch**: cards with a generated initials avatar, a mini shot map and big numbers. No photos or club crests are used.
-- **Match Day**: the live scores page now shows the model's pre-match shots-on-target forecast under each fixture.
+- **Shot Notes and News**: stat stories (hat-tricks, form, shot-heavy matches, per-90 and accuracy leaders) written
+  automatically from the stored matches (`notes.py`), with competition, story-type and date filters.
+- **Players to watch**: cards with a club-colour shirt avatar, a mini shot map and big numbers.
+- **Match Day**: live scores with the model's pre-match shots-on-target forecast under each fixture.

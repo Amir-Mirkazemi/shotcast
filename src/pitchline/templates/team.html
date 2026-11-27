@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+<p class="crumbs"><a href="index.html">Competitions</a> / <a href="{{ lg }}.html">{{ league_name }}</a> / {{ t.name }}</p>
+<section class="ph" style="--kc:{{ color }}"><h1>{{ t.name }}</h1><div class="meta">{{ league_name }} · {{ t.p }} matches in the stored data</div>
+<span class="badge"><b>{{ t.w }}</b> W</span><span class="badge"><b>{{ t.d }}</b> D</span><span class="badge"><b>{{ t.l }}</b> L</span>
+<span class="badge">Goals <b>{{ t.gf }}</b>–<b>{{ t.ga }}</b> ({{ "%+d"|format(gd) }})</span></section>
+<h2>Players<small>by shots on target, all stored matches</small></h2>
+<div class="tablewrap"><table class="sortable"><thead><tr><th>Player</th><th class="n">Shots</th><th class="n">On target</th><th class="n">Goals</th><th class="n">Assists</th></tr></thead><tbody>
+{% for p in players %}<tr><td class="who">{{ m.player_link(p.name, p.url) }}</td><td class="n">{{ p.shots }}</td><td class="n">{{ p.sot }}</td><td class="n">{{ p.goals }}</td><td class="n">{{ p.assists }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Recent results</h2>
+{{ m.results(results) }}
+{% endblock %}

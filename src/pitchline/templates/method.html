@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+{{ m.head("Method and data quality", "#8fa3c7") }}
+<h2>Where the numbers come from</h2>
+<p class="note">Match data comes from ESPN's public match-summary endpoints, which are unofficial and can change without notice. Shots on target, goals and assists are ESPN's own per-player match statistics, added up across the stored matches. Players are identified by ESPN athlete id, so two players with the same name stay separate. Per-90 rates use only matches where the player's minutes are known, and only for players with at least {{ min_per90 }} minutes.</p>
+<h2>How it is checked</h2>
+<p class="note">For every match, the shots parsed from the commentary are compared with ESPN's team totals. A match counts as reconciled when they agree exactly. Where ESPN's team totals are empty (some older seasons), the parsed shots are compared with the sum of ESPN's player statistics instead. Matches that do not reconcile are flagged and retried, never hidden.</p>
+<div class="tablewrap"><table><thead><tr><th>Competition</th><th class="n">Matches</th><th class="n">Reconciled</th><th class="n">With minutes</th><th>Stored range</th></tr></thead><tbody>
+{% for c in rows %}<tr><td>{{ c.name }}</td><td class="n">{{ c.matches|thousands }}</td><td class="n">{{ c.ok|thousands }} ({{ "%.1f"|format(c.pct) }}%)</td><td class="n">{{ c.with_lineup|thousands }}</td><td>{{ c.span }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="note">Last built {{ stamp }} UTC.</p>
+<h2>Known limits</h2>
+<ul class="plain">
+<li>ESPN counts some blocked shots as on target. This site uses ESPN's own on-target numbers, so some players differ from other data providers.</li>
+<li>A small number of matches have incomplete commentary at the source and stay flagged.</li>
+<li>Totals cover only the stored matches and date ranges above, not a full history.</li>
+<li>Minutes and appearances exist only for matches stored with a lineup; players without one show "-".</li>
+<li>Shot locations come in two ESPN formats (0-100 with the goal at 100, and 0-1 with the goal at 0). The shot maps detect the format for each match. Some shots have no location and are not drawn.</li>
+<li>The "Best of the best" page adds a player's matches across competitions without adjusting for league strength, so treat it as a count, not a verdict on quality.</li>
+<li>No expected-goals ranking is published. An estimate exists, but it has not been validated against independent data, and ESPN's coordinate formats make that check necessary first.</li>
+</ul>
+<h2>How it is built</h2>
+<p class="note">A scheduled GitHub Actions job downloads new matches, parses them, checks them and writes one JSON file per match to Amazon S3. Another job rebuilds this site from those files and publishes it. Code, tests and design notes are in the <a href="{{ REPO_URL }}">GitHub repository</a>.</p>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+{% if not fc %}
+{{ m.head("Forecast", "#38bdf8") }}
+<p class="note">The first forecast has not been generated yet. It appears here after the next scheduled run.</p>
+{% else %}
+{{ m.head("Forecast", "#38bdf8", "Shots on target · made " ~ asof ~ " UTC") }}
+<h2>Next matchday<small>expected shots on target, next 7 days</small></h2>
+{% if md %}
+<div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th><th class="n opt">Date</th><th class="n opt">Baseline</th><th class="n">Expected on target</th></tr></thead><tbody>
+{% for p in md %}<tr><td class="rk">{{ loop.index }}</td><td class="who">{{ p.player }}<small>{{ p.team }} {{ "vs" if p.home else "@" }} {{ p.opponent }} · {{ p.league_name }}</small></td><td class="n opt">{{ p.date }}</td><td class="n opt">{{ fmt(p.baseline) }}</td><td class="n hl"><b>{{ fmt(p.pred) }}</b></td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<p class="note">No upcoming matches in the next 7 days for the stored competitions.</p>{% endif %}
+
+<h2>Season projection<small>shots on target by the end of the season</small></h2>
+<p class="note">Shots on target so far plus the expected rate times matches left. The range covers only the luck in the remaining matches (10th to 90th percentile), not injuries, transfers or changes in form, so it is narrower than reality. Leagues with a fixed schedule only.</p>
+{% for s in seasons %}
+<h3>{{ s.name }}</h3>
+<div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th><th class="n">So far</th><th class="n opt">Matches left</th><th class="n">Projected</th><th class="n opt">Likely range</th></tr></thead><tbody>
+{% for r in s.rows %}<tr><td class="rk">{{ loop.index }}</td><td class="who">{{ r.player }}<small>{{ r.team }}</small></td><td class="n">{{ r.so_far }}</td><td class="n opt">{{ r.left }}</td><td class="n hl"><b>{{ "%.0f"|format(r.proj) }}</b></td><td class="n opt">{{ r.lo }}-{{ r.hi }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endfor %}
+
+<h2>Scorecard<small>forecasts graded on what happened</small></h2>
+{% if not sc.n %}
+<p class="note">Nothing graded yet. Each forecast is saved before the matches are played. Once those matches are stored, this page compares what was predicted with what happened.</p>
+{% else %}
+<p class="note">{{ sc.n|thousands }} saved forecasts for {{ sc.matches|thousands }} matches that have since been played. Predicted {{ sc.predicted_total|thousands }} shots on target in total; the players had {{ sc.actual_total|thousands }}. Players who did not play count as 0, as they would for anyone using the forecast.</p>
+<div class="tablewrap"><table><thead><tr><th>Method</th><th class="n">Avg miss (MAE)</th><th class="n">Bias</th></tr></thead><tbody>
+<tr><td>Forecast</td><td class="n">{{ fmt(sc.model.mae, 3) }}</td><td class="n">{{ fmt(sc.model.bias, 3) }}</td></tr>
+<tr><td>Baseline</td><td class="n">{{ fmt(sc.baseline.mae, 3) }}</td><td class="n">{{ fmt(sc.baseline.bias, 3) }}</td></tr></tbody></table></div>
+{% endif %}
+
+<h2>How the model is tested</h2>
+{% if card %}
+{% if not card.results %}
+<p class="note"><b>Model status: baseline only.</b> {{ card.reason }}. Until then the forecasts use each player's own recent rate times expected minutes.</p>
+{% else %}
+<h3>Backtest</h3>
+<p class="note">Trained on {{ card.train_rows|thousands }} player-matches up to {{ card.train_until }}, then tested on {{ card.test_rows|thousands }} later ones ({{ card.test_from }} to {{ card.test_to }}). Lower is better.
+{% if card.beats_baseline %}The model beat the baseline on matches it never saw, so it is used.{% else %}No model beat the baseline on matches it never saw, so the baseline is used. That is a real result: shots on target are noisy and a simple rule is hard to beat.{% endif %}</p>
+<div class="tablewrap"><table><thead><tr><th>Method</th><th class="n">Avg miss (MAE)</th><th class="n">Poisson deviance</th><th class="n">Bias</th></tr></thead><tbody>
+{% for x in methods %}<tr><td>{{ x.name }}{% if x.used %} <b>(used)</b>{% endif %}</td><td class="n">{{ fmt(x.mae, 3) }}</td><td class="n">{{ fmt(x.deviance, 3) }}</td><td class="n">{{ fmt(x.bias, 3) }}</td></tr>{% endfor %}
+</tbody></table></div>
+<h3>Does it say what it means?</h3>
+<p class="note">Players sorted by predicted shots on target and split into five groups. If the model is honest, the two columns match.</p>
+<div class="tablewrap"><table><thead><tr><th class="n">Predicted (avg)</th><th class="n">Actual (avg)</th><th class="n">Player-matches</th></tr></thead><tbody>
+{% for c in card.calibration %}<tr><td class="n">{{ "%.2f"|format(c.predicted) }}</td><td class="n">{{ "%.2f"|format(c.actual) }}</td><td class="n">{{ c.n|thousands }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+{% endif %}
+<p class="note">Method: for each player in each match, features known before kickoff (own shots-on-target rate over recent matches, shrunk toward the average, expected minutes, home or away, the team's shot volume and the opponent's shots conceded) feed a Poisson model. Newer matches are always the test set. Nothing is hidden when the model does not win.</p>
+{% endif %}
+{% endblock %}

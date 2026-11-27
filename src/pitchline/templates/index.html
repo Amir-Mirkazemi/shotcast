@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+<section class="stage"><div class="stage-in">
+  <div class="stage-copy">
+    <h1>Who really shoots,<br>and who finishes?</h1>
+    <p>Every shot from {{ n_comp }} competitions, placed on the pitch and rebuilt automatically from match data. Search a player or open a league.</p>
+    <div class="hsearch" style="max-width:420px"><input id="q" class="search" type="search" placeholder="Search a player, e.g. Haaland" aria-label="Search a player" autocomplete="off" data-search="qdrop"><div class="sdrop" id="qdrop" role="listbox" style="right:auto;left:0"></div></div>
+    <div class="skpis">
+      <div class="skpi"><b data-count="{{ total }}">{{ total|thousands }}</b><span>matches</span></div>
+      <div class="skpi"><b data-count="{{ players_n }}">{{ players_n|thousands }}</b><span>players</span></div>
+      <div class="skpi"><b data-count="{{ n_comp }}">{{ n_comp }}</b><span>competitions</span></div>
+    </div>
+  </div>
+  {% if hero %}
+  <div class="stage-map"><div id="stage-map">{{ hero.svg }}</div>
+    <div class="stage-cap"><a href="{{ hero.url }}">{{ avatar(hero.name, hero.team) }}<span><b>{{ hero.name }}</b>{{ hero.team }}</span></a>
+      <span class="cnt"><b data-count="{{ hero.sot }}">{{ hero.sot|thousands }}</b> shots on target</span>
+      <button type="button" id="replay" class="replay">Replay</button></div></div>
+  {% endif %}
+</div></section>
+
+{% if watch %}
+<h2>Players to watch<small>most shots on target across all stored competitions</small></h2>
+<div class="wcards">
+{% for w in watch %}
+<a class="wcard" style="--kc:{{ w.color }}" href="{{ w.url }}">
+  <div class="wh">{{ avatar(w.name, w.team) }}<div><b>{{ w.name }}</b><span>{{ w.team }}</span></div></div>
+  <div class="pitch mini">{{ w.svg }}</div>
+  <div class="big"><div><b>{{ w.sot|thousands }}</b><span>shots on target</span></div><div><b>{{ w.goals|thousands }}</b><span>goals</span></div></div>
+</a>
+{% endfor %}
+</div>
+{% endif %}
+
+{% if notes %}
+<h2>Shot Notes<small>written automatically from the stored matches</small></h2>
+<div class="notes">
+{% for n in notes %}
+{% if n.url %}<a class="note-card" href="{{ n.url }}">{% else %}<div class="note-card">{% endif %}
+<span class="kind">{{ n.label }}</span><span class="nt">{{ n.text }}</span>
+{% if n.url %}</a>{% else %}</div>{% endif %}
+{% endfor %}
+</div>
+<a class="more-link" href="news.html">All news</a>
+{% endif %}
+
+<h2>Competitions</h2>
+<div class="cards">
+{% for c in competitions %}
+<a class="card" href="{{ c.slug }}.html"><h3>{{ c.name }}</h3><div class="sub">{{ c.matches|thousands }} matches · {{ c.span }}</div>
+{% if c.lead %}<div class="lead">Most on target: <b>{{ c.lead.shots_on_target }}</b> {{ c.lead.player }}</div>{% endif %}</a>
+{% endfor %}
+</div>
+<h2>Latest results<small>newest matches in the data</small></h2>
+{{ m.results(results, True) }}
+<p class="note">Leaderboards are per competition on purpose: leagues differ in strength and in how many matches are stored, so one combined ranking would not be a fair comparison. See <a href="method.html">method</a>.</p>
+{% endblock %}

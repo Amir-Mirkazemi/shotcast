@@ -128,7 +128,8 @@ def test_build_includes_new_pages_and_links(tmp_path):
         assert (out / name).exists(), name
     fc = (out / "forecast.html").read_text()
     assert "baseline only" in fc and "Sam &lt;b&gt;" in fc and "Sam <b>" not in fc
-    assert "&lt;b&gt;" in (out / "call.html").read_text() or "Sam &lt;b&gt;" in (out / "call.html").read_text()
+    call = (out / "call.html").read_text()
+    assert "Sam \\u003cb\\u003e" in call and "Sam <b>" not in call            # JSON in the page is escaped
     home = (out / "index.html").read_text()
     assert "Built by" in home and "Amir Mirkazemi" in home and 'href="best.html"' in home
 

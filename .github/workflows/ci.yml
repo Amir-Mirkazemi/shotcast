@@ -30,6 +30,20 @@ jobs:
           name: dbt-docs
           path: dbt/target/*.json
 
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt && pip install -e .
+      - run: playwright install --with-deps chromium
+      - name: Browser tests (search, theme, tabs, news filters, charts, mobile menu)
+        run: pytest -q tests/e2e
+
   dag:
     runs-on: ubuntu-latest
     timeout-minutes: 15

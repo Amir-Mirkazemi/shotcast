@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+{{ m.head("News", "#7c5cff", "Stat stories written automatically from the stored matches and refreshed every night. No outside articles: every line comes from the data on this site.") }}
+<div class="news-tools">
+  <label>Competition<select id="f-lg"><option value="all">All competitions</option>{% for lg in lgs %}<option value="{{ lg }}">{{ lname(lg) }}</option>{% endfor %}</select></label>
+  <label>Story type<select id="f-k"><option value="all">All stories</option>{% for k in kinds %}<option value="{{ k }}">{{ KIND_LABEL[k] }}</option>{% endfor %}</select></label>
+  <label>Order<select id="f-o"><option value="new">Newest first</option><option value="old">Oldest first</option></select></label>
+  <span id="f-n" class="count" aria-live="polite"></span>
+</div>
+<div id="feed">
+{% for day, items in days.items() %}
+<section class="news-day-group"><h3 class="news-day">{{ day }}</h3><div class="notes">
+{% for n in items %}
+{% if n.url %}<a class="note-card" data-k="{{ n.kind }}" data-lg="{{ n.league }}" href="{{ n.url }}">{% else %}<div class="note-card" data-k="{{ n.kind }}" data-lg="{{ n.league }}">{% endif %}
+<span class="kind">{{ n.label }}</span><span class="nt"><small>{{ n.league_name }}</small>{{ n.text }}</span>
+{% if n.url %}</a>{% else %}</div>{% endif %}
+{% endfor %}
+</div></section>
+{% else %}
+<p class="note">No stories yet.</p>
+{% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="news.js"></script>{% endblock %}

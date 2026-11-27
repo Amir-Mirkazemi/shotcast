@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+{{ m.head("Call your shot", "#ff7a45", "Who finishes the season with the most shots on target?") }}
+<p class="note">Choose up to three players per competition. Your picks are saved in this browser only, nothing is sent anywhere, and you can come back to see how the season is going against the model's projection.</p>
+<select id="call-lg" aria-label="Competition"></select>
+<div id="call" data-seasons='{{ seasons|tojson }}' data-names='{{ names|tojson }}'></div>
+{% endblock %}
+{% block scripts %}<script src="call.js"></script>{% endblock %}

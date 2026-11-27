@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% macro box(x, y, w, t1, t2) %}
+<rect x="{{ x }}" y="{{ y }}" width="{{ w }}" height="64" rx="10" style="fill:var(--panel);stroke:var(--line)"/>
+<text x="{{ x + w / 2 }}" y="{{ y + 28 }}" text-anchor="middle" font-weight="700" style="fill:var(--text)">{{ t1 }}</text>
+<text x="{{ x + w / 2 }}" y="{{ y + 48 }}" text-anchor="middle" font-size="12" style="fill:var(--muted)">{{ t2 }}</text>
+{% endmacro %}
+{% macro line(x1, y1, x2, y2) %}<line x1="{{ x1 }}" y1="{{ y1 }}" x2="{{ x2 }}" y2="{{ y2 }}" style="stroke:var(--muted)" stroke-width="1.5" marker-end="url(#ah)"/>{% endmacro %}
+{% block body %}
+{{ m.head("How it is built", "#8fa3c7", "Last build " ~ stamp ~ " UTC") }}
+<svg viewBox="0 0 820 250" role="img" aria-label="Pipeline: ESPN to parser to S3 to forecast and site" style="width:100%;height:auto;font-family:inherit">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" style="fill:var(--muted)"/></marker></defs>
+{{ box(10, 20, 150, "ESPN", "match endpoints") }}{{ box(200, 20, 170, "Backfill job", "parse + reconcile") }}
+{{ box(410, 20, 150, "Amazon S3", "one JSON per match") }}{{ box(600, 20, 210, "Forecast job", "backtest + save forecasts") }}
+{{ box(410, 150, 150, "Site build", "templates + charts") }}{{ box(600, 150, 210, "GitHub Pages", "this website") }}
+{{ box(10, 150, 360, "Live job (every 15 min)", "scores file, read by the Match Day page") }}
+{{ line(160, 52, 198, 52) }}{{ line(370, 52, 408, 52) }}{{ line(560, 52, 598, 52) }}{{ line(485, 84, 485, 148) }}{{ line(560, 182, 598, 182) }}
+</svg>
+<h2>The pieces</h2>
+<ul class="plain">
+<li><b>Collect.</b> A scheduled GitHub Actions job asks ESPN for finished matches, parses the commentary into one row per shot, and writes one small JSON file per match to Amazon S3. It resumes where it stopped and never downloads a finished match twice. Every night it catches up on the last few days for every competition.</li>
+<li><b>Check.</b> Each match is reconciled against ESPN's own totals. Right now {{ ok|thousands }} of {{ total|thousands }} stored matches ({{ "%.1f"|format(pct) }}%) agree exactly; the rest stay flagged and are retried, not hidden.</li>
+<li><b>Forecast.</b> After the nightly run, a job rebuilds features from past matches only, trains Poisson models, tests them on newer matches, saves the forecasts, and later grades them. See <a href="forecast.html">Forecast</a>.</li>
+<li><b>Publish.</b> The site is static HTML rendered from Jinja2 templates over the stored files, so there is no server or database to run. A finished match shows up without anyone touching anything.</li>
+<li><b>Live.</b> A separate job refreshes near-live scores every 15 minutes and publishes one tiny file.</li>
+</ul>
+<h2>Choices worth knowing</h2>
+<ul class="plain">
+<li>Storage holds parsed results, not raw ESPN responses, which keeps it small and cheap.</li>
+<li>Players are keyed by ESPN athlete id so same-name players never merge.</li>
+<li>Forecasts are saved before matches and graded after, so the scorecard cannot be rewritten with hindsight.</li>
+<li>Fonts, icons and charts are served from the site itself, so a visit makes no third-party requests.</li>
+<li>Everything runs on free tiers plus a few cents of S3 storage.</li>
+</ul>
+<p class="note">Code, tests and design notes: <a href="{{ REPO_URL }}">GitHub repository</a>. Built by {{ OWNER }}.</p>
+{% endblock %}

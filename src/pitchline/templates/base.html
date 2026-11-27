@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#060d1a">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<title>{{ title }}</title>
+{% if desc %}<meta name="description" content="{{ desc }}">{% endif %}
+{% if SITE_URL %}
+<meta property="og:site_name" content="{{ SITE_NAME }}"><meta property="og:type" content="website">
+<meta property="og:title" content="{{ title }}"><meta property="og:description" content="{{ desc }}">
+<meta property="og:url" content="{{ SITE_URL }}/{{ path }}">
+{% if image %}<meta property="og:image" content="{{ SITE_URL }}/{{ image }}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">{% endif %}
+{% endif %}
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 21V5h16v16' fill='none' stroke='%2334d399' stroke-width='2.4'/%3E%3Ccircle cx='12' cy='14' r='2.8' fill='%2334d399'/%3E%3C/svg%3E">
+<link rel="preload" href="fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+{% include "_icons.html" %}
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="index.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5h16v16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="14" r="2.6" fill="currentColor"/></svg>{{ SITE_NAME }}</a>
+  <nav class="nav" id="nav" aria-label="Main">
+    {% for id, label, icon, href in NAV %}
+    <a href="{{ href }}"{% if page_id == id %} aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-{{ icon }}"/></svg><span>{{ label }}</span></a>
+    {% endfor %}
+  </nav>
+  <div class="tools">
+    <div class="hsearch"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="search" placeholder="Search players  /" aria-label="Search players" autocomplete="off" data-search="sdrop">
+      <div class="sdrop" id="sdrop" role="listbox"></div></div>
+    <button class="iconbtn" id="theme" type="button" aria-label="Switch to light theme"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></button>
+    <button class="iconbtn menu-btn" id="menu-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></button>
+  </div>
+</div></header>
+<main class="wrap" id="main">
+{% block body %}{% endblock %}
+<footer>Built by <b>{{ OWNER }}</b>{% for name, url in OWNER_LINKS %} · <a href="{{ url }}">{{ name }}</a>{% endfor %}<br>
+Match data from ESPN (unofficial endpoints). Not affiliated with ESPN or any league.
+<a href="about.html">About</a> · <a href="method.html">Method</a> · <a href="how.html">How it is built</a> · <a href="{{ REPO_URL }}">Source code</a></footer>
+</main>
+<script src="app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

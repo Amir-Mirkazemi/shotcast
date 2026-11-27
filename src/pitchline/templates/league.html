@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+<p class="crumbs"><a href="index.html">Competitions</a> / {{ name }}</p>
+{{ m.head(name, color, "%s matches stored · %s"|format(cov.matches|thousands, span)) }}
+<h2>Leaderboards<small>top {{ n }} · click a column to sort</small></h2>
+<div class="tabs">{% for b in boards %}<button type="button" data-tab="t-{{ b.id }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ b.label }}</button>{% endfor %}</div>
+{% for b in boards %}<div class="panel" id="t-{{ b.id }}"{% if not loop.first %} hidden{% endif %}>{{ m.board(b) }}</div>{% endfor %}
+{% if not cov.with_lineup %}<p class="note">Minutes and appearances are not stored for this competition yet, so per-90 rates are unavailable.</p>{% endif %}
+<h2>Latest results</h2>
+{{ m.results(results) }}
+<h2>Teams<small>record in the stored matches</small></h2>
+<div class="cards">{% for t in teams %}<a class="card" href="{{ t.url }}"><h3>{{ t.name }}</h3><div class="sub">{{ t.p }} played · {{ t.w }}W {{ t.d }}D {{ t.l }}L</div></a>{% endfor %}</div>
+{% endblock %}
