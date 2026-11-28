@@ -90,3 +90,15 @@ def test_score_mismatch_in_the_feed_is_a_warning_not_a_failure(tmp_path):
     db = fill(tmp_path, [match("1", "2025-09-01T14:00Z", goals_x=5)])
     res = run_dbt(db, tmp_path, "build", "--select", "tag:espn")
     assert res.returncode == 0 and "WARN" in res.stdout
+
+
+def test_the_statsbomb_pipeline_never_builds_the_espn_models():
+    """The ESPN models need tables that only the ESPN loader creates; a StatsBomb-only run must leave them out
+    (this broke CI once: `make sample` built everything and failed on the missing espn_raw schema)."""
+    import re
+
+    for path in ("Makefile", "orchestration/dags/pitchline_daily.py"):
+        for line in (ROOT / path).read_text().splitlines():
+            runs_dbt = re.search(r"(&& |\{DBT\} )(dbt )?build", line)          # a command, not a description
+            if runs_dbt and "tag:espn" not in line:
+                raise AssertionError(f"{path}: {line.strip()!r} would also build the ESPN models")

@@ -39,7 +39,7 @@ with DAG(
     build_bronze = BashOperator(task_id="build_bronze", bash_command=f"{PY} -m pitchline bronze")
     dbt_build = BashOperator(
         task_id="dbt_build",
-        bash_command=f"cd {HOME}/dbt && {DBT} build",
+        bash_command=f"cd {HOME}/dbt && {DBT} build --exclude tag:espn",
     )
     dbt_summary = BashOperator(
         task_id="dbt_summary",

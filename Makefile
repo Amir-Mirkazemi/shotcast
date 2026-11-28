@@ -26,7 +26,7 @@ bronze:  ## Convert raw JSON to Parquet
 	$(PY) -m pitchline bronze
 
 dbt:  ## Build the warehouse and run all 44 data tests
-	mkdir -p warehouse && cd dbt && dbt build
+	mkdir -p warehouse && cd dbt && dbt build --exclude tag:espn
 
 health:  ## Write the dbt test summary the app's Data health page reads
 	$(PY) -m pitchline dbt-summary
@@ -35,7 +35,7 @@ all: ingest bronze dbt health  ## Whole pipeline, end to end
 
 sample:  ## Quick run: 3 matches, same steps (what CI does)
 	$(PY) -m pitchline all --config config/ci_sources.yml --limit 3
-	mkdir -p warehouse && cd dbt && dbt build
+	mkdir -p warehouse && cd dbt && dbt build --exclude tag:espn
 	$(PY) -m pitchline dbt-summary
 
 espn:  ## Load stored ESPN matches into DuckDB (incremental), run their dbt models and tests
