@@ -169,6 +169,22 @@ player shot and chance creation totals across years and updates as matches finis
 - StatsBomb open data is used under its attribution terms. Credit: StatsBomb.
 
 
+## Forecast model
+
+The Forecast page predicts shots on target per player and match, and is built to be checked rather than believed.
+Details and limits are in [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md).
+
+| Part | Code | What it does |
+|---|---|---|
+| Walk-forward validation | `mlcore.py`, `forecast.train_and_backtest` | Four successive test periods, each predicted by a model trained only on earlier matches. |
+| Candidates | `mlcore.fit` | Poisson regression, scikit-learn boosting and LightGBM (Poisson loss), against a baseline of own recent rate x minutes. |
+| Gate | `mlcore.paired_bootstrap` | A model is used only if it wins most periods and its gain stays positive when whole matches are resampled. Otherwise the baseline is used and the page says so. |
+| Spread | `mlcore.estimate_alpha` | Negative binomial dispersion measured out of sample, giving the chance of 1+ and 2+ on target. |
+| Season ranges | `forecast.future_draws` | Rate uncertainty plus match noise. In simulation they cover 85-90% of outcomes for a nominal 80%; the older plain-Poisson ranges covered 62-87%. |
+| Scorecard | `forecast.scorecard` | Saved forecasts graded after the matches: error, bias, Brier score and calibration of the probabilities. |
+
+`tests/test_ml.py` checks the maths on simulated data with known truth: the dispersion is recovered, probabilities are calibrated, test periods never overlap or look ahead, a useless model is rejected, and the page still renders forecasts saved in the older format.
+
 ## Data quality and warehouse
 
 The JSON match files in S3 are the system of record. Three layers sit on top of them:
@@ -179,7 +195,7 @@ The JSON match files in S3 are the system of record. Three layers sit on top of 
 | Warehouse | `warehouse_espn.py`, `dbt/models/espn` | Matches are loaded into DuckDB incrementally: each file has a fingerprint (S3 ETag) taken from the listing, so unchanged files are never downloaded. dbt builds staging models, `dim_espn_match/team/player`, `fct_espn_player_match` (one row per player per match), `fct_espn_shot` and `mart_espn_player_season`. |
 | Observability | `logs.py`, `health_check.py`, `data_quality.yml` | JSON logs in CI, one run record per job in `runs/`, and a daily check that fails the workflow (GitHub emails the owner) when no competition has a new match for 4 days, a file fails the contract, or a dbt test fails. The results are published on the site's [Data health](https://amir-mirkazemi.github.io/shotcast/health.html) page. |
 
-dbt runs 26 tests on the ESPN models: unique and not-null keys, relationships between facts and dimensions, accepted shot outcomes, and four singular tests. Two fail the run: shots on target never above shots, and minutes between 0 and 150. Two only warn, because they flag problems in ESPN's own feed rather than in the pipeline: a team's players scoring more goals than the team's score, and repeated play ids inside one match. `tests/test_dbt_espn.py` runs the real dbt build on a fixture warehouse, including a case where bad data must make a test fail. `tests/test_warehouse_espn.py` checks that the warehouse totals equal the numbers the site shows.
+dbt runs 25 tests on the ESPN models: unique and not-null keys, relationships between facts and dimensions, accepted shot outcomes, and four singular tests. Two fail the run: shots on target never above shots, and minutes between 0 and 150. Two only warn, because they flag problems in ESPN's own feed rather than in the pipeline: a team's players scoring more goals than the team's score, and repeated play ids inside one match. `tests/test_dbt_espn.py` runs the real dbt build on a fixture warehouse, including a case where bad data must make a test fail. `tests/test_warehouse_espn.py` checks that the warehouse totals equal the numbers the site shows.
 
 ```
 make espn      # load new matches into DuckDB, run the ESPN dbt models and tests

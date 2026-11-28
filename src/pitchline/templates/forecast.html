@@ -8,13 +8,14 @@
 {{ m.head("Forecast", "#38bdf8", "Shots on target · made " ~ asof ~ " UTC") }}
 <h2>Next matchday<small>expected shots on target, next 7 days</small></h2>
 {% if md %}
-<div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th><th class="n opt">Date</th><th class="n opt">Baseline</th><th class="n">Expected on target</th></tr></thead><tbody>
-{% for p in md %}<tr><td class="rk">{{ loop.index }}</td><td class="who">{{ p.player }}<small>{{ p.team }} {{ "vs" if p.home else "@" }} {{ p.opponent }} · {{ p.league_name }}</small></td><td class="n opt">{{ p.date }}</td><td class="n opt">{{ fmt(p.baseline) }}</td><td class="n hl"><b>{{ fmt(p.pred) }}</b></td></tr>{% endfor %}
+<div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th><th class="n opt">Date</th><th class="n opt">Baseline</th><th class="n">Expected on target</th>{% if has_prob %}<th class="n">Chance of 1+</th><th class="n opt">Chance of 2+</th>{% endif %}</tr></thead><tbody>
+{% for p in md %}<tr><td class="rk">{{ loop.index }}</td><td class="who">{{ p.player }}<small>{{ p.team }} {{ "vs" if p.home else "@" }} {{ p.opponent }} · {{ p.league_name }}</small></td><td class="n opt">{{ p.date }}</td><td class="n opt">{{ fmt(p.baseline) }}</td><td class="n hl"><b>{{ fmt(p.pred) }}</b></td>{% if has_prob %}<td class="n">{% if p.p1 is defined %}{{ "%.0f"|format(100 * p.p1) }}%{% else %}-{% endif %}</td><td class="n opt">{% if p.p2 is defined %}{{ "%.0f"|format(100 * p.p2) }}%{% else %}-{% endif %}</td>{% endif %}</tr>{% endfor %}
 </tbody></table></div>
+{% if has_prob %}<p class="note">Chance of at least one (or two) shots on target, from the expected number and the spread measured in the backtest below. A player expected to have 0.5 is not 50% to score one: some of his matches will be 0 and a few 2 or 3.</p>{% endif %}
 {% else %}<p class="note">No upcoming matches in the next 7 days for the stored competitions.</p>{% endif %}
 
 <h2>Season projection<small>shots on target by the end of the season</small></h2>
-<p class="note">Shots on target so far plus the expected rate times matches left. The range covers only the luck in the remaining matches (10th to 90th percentile), not injuries, transfers or changes in form, so it is narrower than reality. Leagues with a fixed schedule only.</p>
+<p class="note">Shots on target so far plus the expected rate times matches left. The range (10th to 90th percentile) covers the luck in the remaining matches and the uncertainty in each player's true rate, but not injuries, transfers or changes in form, so reality can still fall outside it. Leagues with a fixed schedule only.</p>
 {% for s in seasons %}
 <h3>{{ s.name }}</h3>
 <div class="tablewrap"><table><thead><tr><th class="n">#</th><th>Player</th><th class="n">So far</th><th class="n opt">Matches left</th><th class="n">Projected</th><th class="n opt">Likely range</th></tr></thead><tbody>
@@ -30,6 +31,7 @@
 <div class="tablewrap"><table><thead><tr><th>Method</th><th class="n">Avg miss (MAE)</th><th class="n">Bias</th></tr></thead><tbody>
 <tr><td>Forecast</td><td class="n">{{ fmt(sc.model.mae, 3) }}</td><td class="n">{{ fmt(sc.model.bias, 3) }}</td></tr>
 <tr><td>Baseline</td><td class="n">{{ fmt(sc.baseline.mae, 3) }}</td><td class="n">{{ fmt(sc.baseline.bias, 3) }}</td></tr></tbody></table></div>
+{% if sc.prob %}<p class="note">Chance of 1+ on target, {{ sc.prob.n|thousands }} graded forecasts: the forecast said {{ "%.1f"|format(100 * sc.prob.predicted_rate) }}% on average and {{ "%.1f"|format(100 * sc.prob.actual_rate) }}% happened. Brier score {{ fmt(sc.prob.brier, 4) }} for the forecast and {{ fmt(sc.prob.brier_baseline, 4) }} for the baseline (lower is better).</p>{% endif %}
 {% endif %}
 
 <h2>How the model is tested</h2>
@@ -37,19 +39,42 @@
 {% if not card.results %}
 <p class="note"><b>Model status: baseline only.</b> {{ card.reason }}. Until then the forecasts use each player's own recent rate times expected minutes.</p>
 {% else %}
+{% if card.folds %}
+<h3>Walk-forward backtest</h3>
+<p class="note">Not one split but {{ card.n_folds }} successive test periods ({{ card.test_from }} to {{ card.test_to }}). Each period is predicted by a model trained only on matches before it, so every prediction is on matches the model never saw. Lower is better. The model must beat the baseline in most periods and its gain must stay positive when whole matches are resampled (paired bootstrap).
+{% if card.beats_baseline %}It did: the {{ best_name }} won {{ card.wins }} of {{ card.n_folds }} periods, with an average gain of {{ fmt(card.gain.mean, 3) }} deviance per player-match (95% interval {{ fmt(card.gain.lo, 3) }} to {{ fmt(card.gain.hi, 3) }}), so it is used.{% else %}It did not: the best model won {{ card.wins }} of {{ card.n_folds }} periods and its gain was {{ fmt(card.gain.mean, 3) }} (95% interval {{ fmt(card.gain.lo, 3) }} to {{ fmt(card.gain.hi, 3) }}), so the baseline is used. That is a real result: shots on target are noisy and a simple rule is hard to beat.{% endif %}</p>
+<div class="tablewrap"><table><thead><tr><th>Method (all test periods together)</th><th class="n">Avg miss (MAE)</th><th class="n">Poisson deviance</th><th class="n">Bias</th></tr></thead><tbody>
+{% for x in methods %}<tr><td>{{ x.name }}{% if x.used %} <b>(used)</b>{% endif %}</td><td class="n">{{ fmt(x.mae, 3) }}</td><td class="n">{{ fmt(x.deviance, 3) }}</td><td class="n">{{ fmt(x.bias, 3) }}</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="tablewrap"><table><thead><tr><th>Test period</th><th class="n opt">Trained on</th><th class="n opt">Tested on</th><th class="n">Baseline</th><th class="n">{{ best_name }}</th></tr></thead><tbody>
+{% for f in card.folds %}<tr><td>{{ f.from }} to {{ f.to }}</td><td class="n opt">{{ f.train_rows|thousands }}</td><td class="n opt">{{ f.test_rows|thousands }}</td><td class="n">{{ fmt(f.deviance.baseline, 3) }}</td><td class="n{% if f.deviance[card.best] < f.deviance.baseline %} hl{% endif %}">{{ fmt(f.deviance[card.best], 3) }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="note">Poisson deviance per player-match for each period. Highlighted where the model beat the baseline.</p>
+{% else %}
 <h3>Backtest</h3>
 <p class="note">Trained on {{ card.train_rows|thousands }} player-matches up to {{ card.train_until }}, then tested on {{ card.test_rows|thousands }} later ones ({{ card.test_from }} to {{ card.test_to }}). Lower is better.
-{% if card.beats_baseline %}The model beat the baseline on matches it never saw, so it is used.{% else %}No model beat the baseline on matches it never saw, so the baseline is used. That is a real result: shots on target are noisy and a simple rule is hard to beat.{% endif %}</p>
+{% if card.beats_baseline %}The model beat the baseline on matches it never saw, so it is used.{% else %}No model beat the baseline on matches it never saw, so the baseline is used. That is a real result: shots on target are noisy and a simple rule is hard to beat.{% endif %} This forecast was made before walk-forward testing was added; the next scheduled run replaces this section.</p>
 <div class="tablewrap"><table><thead><tr><th>Method</th><th class="n">Avg miss (MAE)</th><th class="n">Poisson deviance</th><th class="n">Bias</th></tr></thead><tbody>
 {% for x in methods %}<tr><td>{{ x.name }}{% if x.used %} <b>(used)</b>{% endif %}</td><td class="n">{{ fmt(x.mae, 3) }}</td><td class="n">{{ fmt(x.deviance, 3) }}</td><td class="n">{{ fmt(x.bias, 3) }}</td></tr>{% endfor %}
 </tbody></table></div>
+{% endif %}
 <h3>Does it say what it means?</h3>
 <p class="note">Players sorted by predicted shots on target and split into five groups. If the model is honest, the two columns match.</p>
 <div class="tablewrap"><table><thead><tr><th class="n">Predicted (avg)</th><th class="n">Actual (avg)</th><th class="n">Player-matches</th></tr></thead><tbody>
 {% for c in card.calibration %}<tr><td class="n">{{ "%.2f"|format(c.predicted) }}</td><td class="n">{{ "%.2f"|format(c.actual) }}</td><td class="n">{{ c.n|thousands }}</td></tr>{% endfor %}
 </tbody></table></div>
+{% if card.alpha %}
+<h3>How much do outcomes spread around the forecast?</h3>
+<p class="note">Shots on target vary more from match to match than a Poisson allows: a player has good and bad days beyond what his average says. The forecast therefore uses a negative binomial with a dispersion of {{ "%.2f"|format(card.alpha) }}, measured on the test periods above{% if card.likelihood %}. On those matches it gave the actual outcomes an average log-likelihood of {{ fmt(card.likelihood.negative_binomial, 3) }}, against {{ fmt(card.likelihood.poisson, 3) }} for a plain Poisson (higher is better){% endif %}.</p>
+{% if card.prob_calibration and card.brier %}
+<p class="note">Chance of at least one shot on target, in the same five groups. Players happened to have one or more in {{ "%.0f"|format(100 * card.base_rate) }}% of player-matches. Brier score (lower is better): {{ fmt(card.brier.used, 4) }} for the forecast, {{ fmt(card.brier.baseline, 4) }} for the baseline.</p>
+<div class="tablewrap"><table><thead><tr><th class="n">Said (avg chance)</th><th class="n">Happened</th><th class="n">Player-matches</th></tr></thead><tbody>
+{% for c in card.prob_calibration %}<tr><td class="n">{{ "%.1f"|format(100 * c.predicted) }}%</td><td class="n">{{ "%.1f"|format(100 * c.actual) }}%</td><td class="n">{{ c.n|thousands }}</td></tr>{% endfor %}
+</tbody></table></div>
 {% endif %}
 {% endif %}
-<p class="note">Method: for each player in each match, features known before kickoff (own shots-on-target rate over recent matches, shrunk toward the average, expected minutes, home or away, the team's shot volume and the opponent's shots conceded) feed a Poisson model. Newer matches are always the test set. Nothing is hidden when the model does not win.</p>
+{% endif %}
+{% endif %}
+<p class="note">Method: for each player in each match, features known before kickoff (own shots-on-target rate over recent matches, shrunk toward the average, expected minutes, how often he starts, days since his last match, home or away, the team's shot volume and the opponent's shots conceded) feed Poisson-loss models: a regression, scikit-learn boosting and LightGBM. Newer matches are always the test set, and nothing is hidden when the model does not win. The full description, with limits, is in the <a href="{{ REPO_URL }}/blob/main/docs/MODEL_CARD.md">model card</a>.</p>
 {% endif %}
 {% endblock %}

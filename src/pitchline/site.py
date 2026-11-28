@@ -467,9 +467,12 @@ def forecast_page(fc: dict | None, sc: dict) -> str:
         ctx["card"] = card
         if card.get("results"):
             names = {"baseline": "Baseline (own recent rate x minutes)", "league average": "Everyone gets the average",
-                     "poisson": "Poisson regression", "boosted": "Gradient-boosted Poisson"}
+                     "poisson": "Poisson regression", "boosted": "Gradient-boosted Poisson (scikit-learn)",
+                     "lightgbm": "LightGBM (Poisson)"}
             ctx["methods"] = [{"name": names.get(k, k), "used": k == card["best"] and card["beats_baseline"], **v}
                               for k, v in card["results"].items()]
+            ctx["best_name"] = names.get(card["best"], card["best"])
+        ctx["has_prob"] = any("p1" in p for p in ctx["md"])
     return render("forecast.html", title=f"Forecast | {SITE_NAME}",
                   desc="Shots on target forecasts with a public backtest and scorecard.", path="forecast.html",
                   image="og-home.png", page_id="forecast", **ctx)

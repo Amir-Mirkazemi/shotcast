@@ -3,10 +3,12 @@
 What it predicts: how many shots on target each player will have in a match (next matchday), and how many
 they will finish the season with (season projection, deliberately simple).
 
-How it is judged: models are trained on older matches and tested on newer ones, never the reverse, and are
-compared with a plain baseline (the player's own recent rate times expected minutes). A model is only used
-if it beats the baseline on the test period. Every forecast is saved before the matches, then graded on
-what actually happened.
+How it is judged: walk-forward validation. Several successive future periods are each predicted by a model
+trained only on what came before, and compared with a plain baseline (the player's own recent rate times
+expected minutes). A model is only used if it beats the baseline clearly (paired bootstrap over matches) and
+in most periods. The spread of outcomes around each forecast is a negative binomial whose dispersion is
+measured on those out-of-sample periods, which gives "chance of at least one on target". Every forecast is
+saved before the matches, then graded on what actually happened.
 
 Run: python -m pitchline.forecast --root s3://bucket/pitchline
 """
@@ -16,21 +18,26 @@ import argparse
 import json
 import logging
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import numpy as np
 
+from . import mlcore as ml
 from .espn_shots import _norm
 from .leaderboard import read_records
 from .live import LEAGUES, day_events
 from .storage import Store, get_store
 
 log = logging.getLogger("pitchline.forecast")
-FEATURES = ["rate10", "rate_long", "shots10", "minutes5", "apps", "home", "team_for", "opp_against"]
+FEATURES = ["rate10", "rate_long", "shots10", "minutes5", "apps", "home", "team_for", "opp_against",
+            "start10", "rest_days"]
 SEASON_GAMES = {"eng.1": 38, "esp.1": 38, "ita.1": 38, "ger.1": 34, "fra.1": 34, "usa.1": 34}
 K = 3.0                  # prior strength, in 90-minute games, for shrinking a player's rate toward the average
 MIN_TRAIN = 3000         # fewer player-matches than this and no model is fitted: baseline only
 MIN_TEST = 500
+K_FOLDS = 4              # walk-forward test periods
+MIN_FOLD_TEST = 200
+DEFAULT_REST = 7.0
 PRIOR_RATE = 0.2
 
 
@@ -38,7 +45,8 @@ class State:
     """What is known about everyone after the matches replayed so far."""
 
     def __init__(self):
-        self.hist = defaultdict(lambda: deque(maxlen=40))      # athlete -> (minutes, sot, shots)
+        self.hist = defaultdict(lambda: deque(maxlen=40))      # athlete -> (minutes, sot, shots, started)
+        self.last_date: dict[str, str] = {}
         self.team_hist = defaultdict(lambda: deque(maxlen=10))  # team key -> (shots for, shots against)
         self.team_apps = defaultdict(lambda: deque(maxlen=5))   # team key -> sets of athlete ids who played
         self.last_team: dict[str, str] = {}
@@ -55,7 +63,16 @@ class State:
             return 12.0, 12.0
         return (sum(a for a, _ in h) / len(h), sum(b for _, b in h) / len(h))
 
-    def features(self, aid: str, team: str, opp: str, home: float) -> list[float] | None:
+    def rest_days(self, aid: str, day: str) -> float:
+        last = self.last_date.get(aid)
+        if not last or not day:
+            return DEFAULT_REST
+        try:
+            return float(min(max((date.fromisoformat(day[:10]) - date.fromisoformat(last[:10])).days, 0), 14))
+        except ValueError:
+            return DEFAULT_REST
+
+    def features(self, aid: str, team: str, opp: str, home: float, day: str = "") -> list[float]:
         h = list(self.hist.get(aid, ()))
         prior = self.prior()
         last10 = h[-10:]
@@ -68,7 +85,9 @@ class State:
         minutes5 = sum(x[0] for x in last5) / len(last5) if last5 else 45.0
         t_for = self.team_avgs(team)[0]
         o_against = self.team_avgs(opp)[1]
-        return [rate10, rate_long, shots10, minutes5, float(min(len(h), 10)), home, t_for, o_against]
+        start10 = (sum(x[3] for x in last10) + 1.0) / (len(last10) + 2.0)        # share of recent matches started
+        return [rate10, rate_long, shots10, minutes5, float(min(len(h), 10)), home, t_for, o_against,
+                start10, self.rest_days(aid, day)]
 
 
 def baseline(f: list[float]) -> float:
@@ -100,7 +119,7 @@ def replay(recs: list[dict]) -> tuple[list[dict], State]:
             tk = _team_key(p["team"])
             if tk not in opp_of:
                 continue
-            f = st.features(p["athlete_id"], tk, opp_of[tk], home_of[tk])
+            f = st.features(p["athlete_id"], tk, opp_of[tk], home_of[tk], day)
             s = stats.get(p["athlete_id"], {})
             rows.append({"date": day, "league": rec["league"], "event_id": rec["event_id"],
                          "athlete_id": p["athlete_id"], "player": p["player"], "team": p["team"], "f": f,
@@ -111,7 +130,10 @@ def replay(recs: list[dict]) -> tuple[list[dict], State]:
                 continue
             s = stats.get(p["athlete_id"], {})
             sot, sh = s.get("shots_on_target") or 0, s.get("shots") or 0
-            st.hist[p["athlete_id"]].append((p["minutes"], sot, sh))
+            started = p.get("starter")
+            started = p["minutes"] >= 60 if started is None else bool(started)
+            st.hist[p["athlete_id"]].append((p["minutes"], sot, sh, 1.0 if started else 0.0))
+            st.last_date[p["athlete_id"]] = day
             st.sot += sot
             st.min90 += p["minutes"] / 90
             st.last_team[p["athlete_id"]] = tk
@@ -122,71 +144,69 @@ def replay(recs: list[dict]) -> tuple[list[dict], State]:
     return rows, st
 
 
-def _deviance(y: np.ndarray, mu: np.ndarray) -> float:
-    mu = np.clip(mu, 1e-3, None)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        d = 2 * (np.where(y > 0, y * np.log(np.where(y > 0, y, 1) / mu), 0.0) - (y - mu))
-    return float(np.mean(d))
-
-
-def _metrics(y: np.ndarray, mu: np.ndarray) -> dict:
-    return {"mae": round(float(np.mean(np.abs(y - mu))), 4), "deviance": round(_deviance(y, mu), 4),
-            "bias": round(float(np.mean(mu - y)), 4)}
-
-
-def _fit(kind: str, X: np.ndarray, y: np.ndarray):
-    if kind == "poisson":
-        from sklearn.linear_model import PoissonRegressor
-        from sklearn.pipeline import make_pipeline
-        from sklearn.preprocessing import StandardScaler
-        return make_pipeline(StandardScaler(), PoissonRegressor(alpha=1e-3, max_iter=500)).fit(X, y)
-    from sklearn.ensemble import HistGradientBoostingRegressor
-    return HistGradientBoostingRegressor(loss="poisson", max_iter=150, learning_rate=0.05, max_depth=3,
-                                         random_state=0).fit(X, y)
-
-
-def calibration(y: np.ndarray, mu: np.ndarray, bins: int = 5) -> list[dict]:
-    order = np.argsort(mu)
-    out = []
-    for chunk in np.array_split(order, bins):
-        if len(chunk):
-            out.append({"predicted": round(float(mu[chunk].mean()), 3), "actual": round(float(y[chunk].mean()), 3),
-                        "n": int(len(chunk))})
-    return out
+_deviance, _metrics, calibration = ml.deviance, ml.metrics, ml.reliability
 
 
 def train_and_backtest(rows: list[dict]) -> tuple[object | None, dict]:
-    """Fit on the older 75% of matches, test on the newest 25%, pick the best model, refit on everything."""
-    card: dict = {"rows": len(rows), "features": FEATURES, "status": "baseline only"}
+    """Walk-forward backtest of every candidate against the baseline; refit the winner on all rows.
+
+    Returns (model or None, card). None means the baseline is used. The card always carries the dispersion
+    (`alpha`) measured on out-of-sample predictions of whichever predictor is used, so probabilities stay honest
+    even when the baseline wins."""
+    card: dict = {"rows": len(rows), "features": FEATURES, "status": "baseline only", "alpha": None,
+                  "alpha_baseline": None}
     if len(rows) < MIN_TRAIN + MIN_TEST:
         card["reason"] = f"needs at least {MIN_TRAIN + MIN_TEST:,} player-matches with minutes; have {len(rows):,}"
         return None, card
-    cut = rows[int(len(rows) * 0.75)]["date"]
-    train = [r for r in rows if r["date"] < cut]
-    test = [r for r in rows if r["date"] >= cut]
-    if len(train) < MIN_TRAIN or len(test) < MIN_TEST:
-        card["reason"] = "not enough rows on one side of the time split"
+    folds = ml.walk_forward_folds([r["date"] for r in rows], K_FOLDS, min_train=MIN_TRAIN, min_test=MIN_FOLD_TEST)
+    if len(folds) < 2:
+        card["reason"] = "not enough history for walk-forward validation (needs at least two test periods)"
         return None, card
-    Xtr, ytr = np.array([r["f"] for r in train]), np.array([r["y"] for r in train], float)
-    Xte, yte = np.array([r["f"] for r in test]), np.array([r["y"] for r in test], float)
-    results = {"baseline": _metrics(yte, np.array([baseline(r["f"]) for r in test])),
-               "league average": _metrics(yte, np.full(len(yte), ytr.mean()))}
-    models = {}
-    for kind in ("poisson", "boosted"):
-        m = _fit(kind, Xtr, ytr)
-        models[kind] = m
-        results[kind] = _metrics(yte, np.clip(m.predict(Xte), 1e-3, None))
-    best = min(models, key=lambda k: results[k]["deviance"])
-    card.update({"train_until": cut, "train_rows": len(train), "test_rows": len(test),
-                 "test_from": test[0]["date"], "test_to": test[-1]["date"], "results": results,
-                 "best": best, "beats_baseline": results[best]["deviance"] < results["baseline"]["deviance"],
-                 "calibration": calibration(yte, np.clip(models[best].predict(Xte), 1e-3, None))})
-    if not card["beats_baseline"]:
-        card["reason"] = "no model beat the baseline on the test period, so the baseline is used"
+    X, y = np.array([r["f"] for r in rows]), np.array([r["y"] for r in rows], float)
+    base = np.array([baseline(r["f"]) for r in rows])
+    kinds = ml.available_models()
+    oof = {k: np.full(len(rows), np.nan) for k in kinds}
+    league = np.full(len(rows), np.nan)
+    per_fold = []
+    for f in folds:
+        league[f.test] = y[f.train].mean()
+        dev = {"baseline": round(ml.deviance(y[f.test], base[f.test]), 4)}
+        for k in kinds:
+            oof[k][f.test] = ml.predict_mean(ml.fit(k, X[f.train], y[f.train]), X[f.test])
+            dev[k] = round(ml.deviance(y[f.test], oof[k][f.test]), 4)
+        per_fold.append({"from": f.start, "to": f.end, "train_rows": int(len(f.train)), "test_rows": int(len(f.test)),
+                         "deviance": dev})
+    idx = np.concatenate([f.test for f in folds])
+    yt = y[idx]
+    results = {"baseline": ml.metrics(yt, base[idx]), "league average": ml.metrics(yt, league[idx])}
+    for k in kinds:
+        results[k] = ml.metrics(yt, oof[k][idx])
+    best = min(kinds, key=lambda k: results[k]["deviance"])
+    wins = sum(1 for pf in per_fold if pf["deviance"][best] < pf["deviance"]["baseline"])
+    groups = np.array([rows[i]["event_id"] for i in idx])
+    gain, lo, hi = ml.paired_bootstrap(ml.deviance_rows(yt, base[idx]), ml.deviance_rows(yt, oof[best][idx]), groups)
+    beats = bool(gain > 0 and lo > 0 and wins > len(folds) / 2)
+    used = oof[best][idx] if beats else base[idx]
+    alpha, alpha_b = ml.estimate_alpha(yt, used), ml.estimate_alpha(yt, base[idx])
+    happened = (yt >= 1).astype(float)
+    p_used, p_base = ml.p_at_least(used, alpha), ml.p_at_least(base[idx], alpha_b)
+    card.update({
+        "train_until": folds[0].start, "train_rows": int(len(folds[0].train)), "test_rows": int(len(idx)),
+        "test_from": folds[0].start, "test_to": folds[-1].end, "folds": per_fold, "results": results, "best": best,
+        "beats_baseline": beats, "wins": wins, "n_folds": len(folds),
+        "gain": {"mean": round(gain, 4), "lo": round(lo, 4), "hi": round(hi, 4)},
+        "calibration": ml.reliability(used, yt),
+        "alpha": round(alpha, 4), "alpha_baseline": round(alpha_b, 4),
+        "likelihood": {"poisson": round(float(ml.dist(used, 0.0).logpmf(yt).mean()), 4),
+                       "negative_binomial": round(float(ml.dist(used, alpha).logpmf(yt).mean()), 4)},
+        "prob_calibration": ml.reliability(p_used, happened),
+        "brier": {"used": round(ml.brier(p_used, happened), 4), "baseline": round(ml.brier(p_base, happened), 4)},
+        "base_rate": round(float(happened.mean()), 4)})
+    if not beats:
+        card["reason"] = ("no model beat the baseline clearly enough across the test periods, so the baseline is used")
         return None, card
-    final = _fit(best, np.array([r["f"] for r in rows]), np.array([r["y"] for r in rows], float))
     card["status"] = f"{best} model"
-    return final, card
+    return ml.fit(best, X, y), card
 
 
 def predict(model, f: list[float]) -> float:
@@ -214,7 +234,8 @@ def upcoming(fetch, now: datetime, leagues=LEAGUES, days: int = 7, sleep=None) -
     return sorted(out, key=lambda x: x["date"])
 
 
-def matchday_forecast(st: State, model, fixtures: list[dict], per_team: int = 14) -> list[dict]:
+def matchday_forecast(st: State, model, fixtures: list[dict], per_team: int = 14,
+                      alpha: float | None = None, alpha_base: float | None = None) -> list[dict]:
     preds = []
     for fx in fixtures:
         for team, opp, home in ((fx["home"], fx["away"], 1.0), (fx["away"], fx["home"], 0.0)):
@@ -226,13 +247,18 @@ def matchday_forecast(st: State, model, fixtures: list[dict], per_team: int = 14
                 recent = sum(aid in a for a in apps)
                 if st.last_team.get(aid) != tk or recent < 2:
                     continue
-                f = st.features(aid, tk, ok, home)
+                f = st.features(aid, tk, ok, home, str(fx.get("date") or "")[:10])
                 if f[3] < 30:
                     continue
-                preds.append({"league": fx["league"], "event_id": fx["event_id"], "kickoff": fx["date"],
-                              "team": team, "opponent": opp, "home": bool(home), "athlete_id": aid,
-                              "player": st.names[aid], "pred": round(predict(model, f), 3),
-                              "baseline": round(baseline(f), 3)})
+                row = {"league": fx["league"], "event_id": fx["event_id"], "kickoff": fx["date"],
+                       "team": team, "opponent": opp, "home": bool(home), "athlete_id": aid,
+                       "player": st.names[aid], "pred": round(predict(model, f), 3),
+                       "baseline": round(baseline(f), 3)}
+                if alpha is not None:                       # chance of 1+ and 2+ shots on target
+                    row["p1"] = round(float(ml.p_at_least(row["pred"], alpha, 1)), 4)
+                    row["p2"] = round(float(ml.p_at_least(row["pred"], alpha, 2)), 4)
+                    row["b1"] = round(float(ml.p_at_least(row["baseline"], alpha_base or 0.0, 1)), 4)
+                preds.append(row)
     keep = []
     by_team: dict = defaultdict(list)
     for p in preds:
@@ -242,9 +268,23 @@ def matchday_forecast(st: State, model, fixtures: list[dict], per_team: int = 14
     return sorted(keep, key=lambda p: (-p["pred"], p["player"]))
 
 
-def season_projection(recs: list[dict], st: State, model, top: int = 25) -> dict:
-    """Shots on target so far + expected rate x matches left. Simple on purpose; the interval is only the
-    Poisson noise of the future matches, not the uncertainty in the rate itself."""
+def future_draws(rng, mu: float, left: int, alpha: float | None, n_matches: int, draws: int = 4000):
+    """Shots on target over the remaining matches. Two sources of doubt are combined: the player's true rate is
+    only estimated (gamma, tighter the more matches and shots behind the estimate) and each match adds
+    negative-binomial noise on top of the rate (a sum of `left` such matches is negative binomial too)."""
+    if left <= 0:
+        return np.zeros(draws)
+    shape = max(1.0, mu * (n_matches + K))
+    lam = rng.gamma(shape, mu / shape, draws) * left
+    if alpha is None or alpha < ml.MIN_ALPHA:
+        return rng.poisson(lam).astype(float)
+    r = left / alpha
+    return rng.negative_binomial(r, r / (r + lam)).astype(float)
+
+
+def season_projection(recs: list[dict], st: State, model, top: int = 25, alpha: float | None = None) -> dict:
+    """Shots on target so far + expected rate x matches left. The range (10th to 90th percentile) covers the
+    luck in the remaining matches and the uncertainty in the player's rate, but not injuries or transfers."""
     out: dict = {}
     rng = np.random.default_rng(0)
     for lg, games in SEASON_GAMES.items():
@@ -275,7 +315,7 @@ def season_projection(recs: list[dict], st: State, model, top: int = 25) -> dict
             f[7] = 12.0
             mu = predict(model, f)
             left = max(games - played[tk], 0)
-            draws = rng.poisson(mu * left, 4000) if left else np.zeros(1)
+            draws = future_draws(rng, mu, left, alpha, len(st.hist.get(aid, ())))
             rows.append({"athlete_id": aid, "player": st.names[aid], "team": next(
                 (t["name"] for r in cur for t in r.get("teams") or [] if _team_key(t["name"]) == tk), tk),
                 "so_far": int(so_far[aid]), "per_match": round(mu, 3), "left": left,
@@ -290,9 +330,11 @@ def make_forecast(recs: list[dict], fetch, now: datetime | None = None, sleep=No
     now = now or datetime.now(timezone.utc)
     rows, st = replay(recs)
     model, card = train_and_backtest(rows)
+    alpha = card.get("alpha")
     return {"asof": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "model": card,
-            "matchday": matchday_forecast(st, model, upcoming(fetch, now, sleep=sleep)),
-            "season": season_projection(recs, st, model)}
+            "matchday": matchday_forecast(st, model, upcoming(fetch, now, sleep=sleep), alpha=alpha,
+                                          alpha_base=card.get("alpha_baseline")),
+            "season": season_projection(recs, st, model, alpha=alpha)}
 
 
 def scorecard(forecasts: list[dict], recs: list[dict]) -> dict:
@@ -309,6 +351,7 @@ def scorecard(forecasts: list[dict], recs: list[dict]) -> dict:
             if p["kickoff"] > fc["asof"]:                        # made before kickoff, otherwise not a forecast
                 latest[(p["league"], p["event_id"], p["athlete_id"])] = p
     ys, mus, bs, played = [], [], [], 0
+    p1s, b1s, hit = [], [], []
     matches = set()
     for (lg, eid, aid), p in latest.items():
         if (lg, eid) not in actual:
@@ -319,11 +362,22 @@ def scorecard(forecasts: list[dict], recs: list[dict]) -> dict:
         bs.append(p["baseline"])
         played += mins.get(aid, 0) > 0
         matches.add((lg, eid))
+        if "p1" in p and "b1" in p:                            # forecasts made after the probabilities were added
+            p1s.append(p["p1"])
+            b1s.append(p["b1"])
+            hit.append(1.0 if sot.get(aid, 0) >= 1 else 0.0)
     if not ys:
         return {"n": 0}
     y, mu, b = np.array(ys, float), np.array(mus), np.array(bs)
-    return {"n": len(ys), "matches": len(matches), "played": int(played), "predicted_total": round(float(mu.sum()), 1),
-            "actual_total": int(y.sum()), "model": _metrics(y, mu), "baseline": _metrics(y, b)}
+    out = {"n": len(ys), "matches": len(matches), "played": int(played),
+           "predicted_total": round(float(mu.sum()), 1), "actual_total": int(y.sum()),
+           "model": _metrics(y, mu), "baseline": _metrics(y, b)}
+    if p1s:
+        ph, hh = np.array(p1s), np.array(hit)
+        out["prob"] = {"n": len(p1s), "brier": round(ml.brier(ph, hh), 4), "brier_baseline": round(ml.brier(np.array(b1s), hh), 4),
+                       "predicted_rate": round(float(ph.mean()), 4), "actual_rate": round(float(hh.mean()), 4),
+                       "reliability": ml.reliability(ph, hh)}
+    return out
 
 
 def load_forecasts(store: Store) -> list[dict]:
