@@ -2,7 +2,7 @@
 
 **Live site: https://amir-mirkazemi.github.io/shotcast/**
 
-Shotcast is a soccer data project built end to end: a nightly pipeline collects match data for nine competitions, validates it, and rebuilds a public website that ranks shooters, shows where shots come from, forecasts shots on target, and publishes a scorecard of how those forecasts turn out.
+Shotcast is a soccer data project built end to end: a nightly pipeline collects match data for the big European leagues, MLS, the Saudi Pro League and the World Cup and Euros, validates it, and rebuilds a public website that ranks shooters, shows where shots come from, forecasts shots on target, and publishes a scorecard of how those forecasts turn out.
 
 ![Shotcast home](docs/img/site-home.png)
 

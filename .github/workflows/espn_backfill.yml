@@ -8,6 +8,9 @@ on:
       league:
         description: "ESPN league slug, or all for every tracked competition (empty = nightly recent catch-up)"
         required: false
+      targets:
+        description: "Or a targets file, e.g. config/backfill_tournaments.yml or config/backfill_saudi.yml (ignores league/from/to)"
+        required: false
       from:
         description: "Start date YYYY-MM-DD"
         required: false
@@ -24,7 +27,7 @@ on:
         default: "false"
 
 # one run per league at a time, so different leagues can load in parallel (the nightly run has its own group)
-concurrency: espn-backfill-${{ github.event.inputs.league || 'nightly' }}
+concurrency: espn-backfill-${{ github.event.inputs.targets || github.event.inputs.league || 'nightly' }}
 
 jobs:
   backfill:
@@ -44,6 +47,7 @@ jobs:
           AWS_DEFAULT_REGION: us-east-1
           SHOTCAST_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
           IN_LEAGUE: ${{ github.event.inputs.league }}
+          IN_TARGETS: ${{ github.event.inputs.targets }}
           IN_FROM: ${{ github.event.inputs.from }}
           IN_TO: ${{ github.event.inputs.to }}
           IN_RETRY: ${{ github.event.inputs.retry_bad }}
@@ -51,7 +55,9 @@ jobs:
         run: |
           FLAG=""; [ "$IN_RETRY" = "true" ] && FLAG="--retry-bad"
           [ "$IN_UPGRADE" = "true" ] && FLAG="$FLAG --upgrade"
-          if [ -n "$IN_LEAGUE" ]; then
+          if [ -n "$IN_TARGETS" ]; then
+            python -m shotcast.espn_backfill --targets "$IN_TARGETS" --max-minutes 300 $FLAG
+          elif [ -n "$IN_LEAGUE" ]; then
             python -m shotcast.espn_backfill --league "$IN_LEAGUE" --from "$IN_FROM" --to "$IN_TO" --max-minutes 300 $FLAG
           else
             python -m shotcast.espn_backfill --recent 5 --retry-bad --max-minutes 300 $FLAG

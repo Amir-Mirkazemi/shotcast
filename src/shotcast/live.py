@@ -17,7 +17,7 @@ from .http import get_json
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 LEAGUES = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1",
-           "uefa.champions", "afc.champions", "fifa.world"]
+           "uefa.champions", "afc.champions", "fifa.world", "uefa.euro", "ksa.1"]
 log = logging.getLogger("shotcast.live")
 
 

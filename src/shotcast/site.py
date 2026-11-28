@@ -58,7 +58,8 @@ SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
 REPO_URL = "https://github.com/" + os.environ.get("GITHUB_REPOSITORY", "Amir-Mirkazemi/shotcast")
 
 LEAGUE_COLOR = {"eng.1": "#6a2c91", "esp.1": "#d6402b", "ita.1": "#1e6fd9", "ger.1": "#d9232e", "fra.1": "#2748c9",
-                "usa.1": "#1b4fa8", "uefa.champions": "#1a4fbf", "afc.champions": "#0f8a5f", "fifa.world": "#9b1c3b"}
+                "usa.1": "#1b4fa8", "uefa.champions": "#1a4fbf", "afc.champions": "#0f8a5f", "fifa.world": "#9b1c3b",
+                "uefa.euro": "#0a4aa3", "ksa.1": "#1f7a3d"}
 PAGE_COLOR = {"news": "#7c5cff", "live": "#10b981", "forecast": "#38bdf8", "call": "#ff7a45", "best": "#fbbf24",
               "about": "#8fa3c7", "how": "#8fa3c7", "method": "#8fa3c7"}
 
@@ -66,6 +67,7 @@ LEAGUE_NAMES = {
     "eng.1": "Premier League", "esp.1": "La Liga", "ita.1": "Serie A", "fra.1": "Ligue 1",
     "ger.1": "Bundesliga", "usa.1": "MLS", "uefa.champions": "Champions League",
     "afc.champions": "AFC Champions League", "fifa.world": "World Cup",
+    "uefa.euro": "European Championship", "ksa.1": "Saudi Pro League",
 }
 KIND_LABEL = {"hattrick": "Hat-trick", "form": "In form", "heavy": "Shot-heavy", "per90": "Per 90",
               "accuracy": "Accuracy"}

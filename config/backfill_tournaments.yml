@@ -1,0 +1,7 @@
+# One-off loads for the competitions that were thin or missing. Safe to re-run: stored matches are skipped.
+# Run from Actions: espn-backfill -> targets = config/backfill_tournaments.yml
+targets:
+  - {league: fifa.world, from: 2026-06-01, to: 2026-07-31}   # World Cup 2026
+  - {league: fifa.world, from: 2022-11-01, to: 2022-12-31}   # World Cup 2022
+  - {league: fifa.world, from: 2018-06-01, to: 2018-07-31}   # World Cup 2018
+  - {league: uefa.euro,  from: 2024-06-01, to: 2024-07-31}   # Euro 2024

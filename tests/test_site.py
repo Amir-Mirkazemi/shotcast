@@ -174,3 +174,25 @@ def test_build_skips_and_quarantines_records_that_break_the_data_contract(tmp_pa
     assert "Bad Player" not in (out / "players.json").read_text()
     q = json.loads(s.read_bytes("espn/quarantine/eng.1/2.json"))
     assert "on target but 1 shots" in q["reasons"][0]
+
+
+def test_every_tracked_competition_has_a_name_and_color():
+    from shotcast.live import LEAGUES
+
+    for lg in LEAGUES:
+        assert lg in site.LEAGUE_NAMES and lg in site.LEAGUE_COLOR, lg
+    assert {"ksa.1", "fifa.world", "uefa.euro"} <= set(LEAGUES)
+
+
+def test_backfill_target_files_parse_and_cover_the_missing_competitions():
+    from pathlib import Path
+
+    import yaml
+
+    root = Path(__file__).resolve().parents[1] / "config"
+    tour = yaml.safe_load((root / "backfill_tournaments.yml").read_text())["targets"]
+    saudi = yaml.safe_load((root / "backfill_saudi.yml").read_text())["targets"]
+    assert {(t["league"], str(t["from"])[:4]) for t in tour} >= {("fifa.world", "2026"), ("fifa.world", "2022"),
+                                                                 ("fifa.world", "2018"), ("uefa.euro", "2024")}
+    assert {t["league"] for t in saudi} == {"ksa.1"} and min(str(t["from"]) for t in saudi) <= "2023-01-01"
+    assert all(str(t["from"]) < str(t["to"]) for t in tour + saudi)

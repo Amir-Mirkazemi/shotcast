@@ -2,7 +2,7 @@
 {% import "macros.html" as m %}
 {% block body %}
 {{ m.head("About " ~ SITE_NAME, "#8fa3c7") }}
-<p class="note">{{ SITE_NAME }} is a soccer data project built end to end by <b>{{ OWNER }}</b>, a data engineer completing an M.S. in Data Science at UC San Diego. It tracks who shoots and who finishes across nine competitions, shows where shots come from, forecasts shots on target, and keeps a public scorecard of how those forecasts turn out.</p>
+<p class="note">{{ SITE_NAME }} is a soccer data project built end to end by <b>{{ OWNER }}</b>, a data engineer completing an M.S. in Data Science at UC San Diego. It tracks who shoots and who finishes across the big European leagues, MLS, the Saudi Pro League and international tournaments, shows where shots come from, forecasts shots on target, and keeps a public scorecard of how those forecasts turn out.</p>
 <h2>What is under it</h2>
 <ul class="plain">
 <li>A scheduled pipeline (Python, GitHub Actions) downloads match data, parses the commentary into one row per shot, checks every match against the source's own totals, and stores one JSON file per match in Amazon S3.</li>

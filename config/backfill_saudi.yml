@@ -1,0 +1,8 @@
+# Saudi Pro League from Cristiano Ronaldo's first season at Al Nassr (January 2023) to today.
+# About 300 matches a season, so this takes a few hours in total. It resumes where it stopped.
+targets:
+  - {league: ksa.1, from: 2025-08-01, to: 2026-06-30}
+  - {league: ksa.1, from: 2026-08-01, to: 2027-06-30}
+  - {league: ksa.1, from: 2024-08-01, to: 2025-06-30}
+  - {league: ksa.1, from: 2023-08-01, to: 2024-06-30}
+  - {league: ksa.1, from: 2023-01-01, to: 2023-07-31}

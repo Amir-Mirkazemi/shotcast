@@ -31,7 +31,7 @@ from .storage import Store, get_store
 log = logging.getLogger("shotcast.forecast")
 FEATURES = ["rate10", "rate_long", "shots10", "minutes5", "apps", "home", "team_for", "opp_against",
             "start10", "rest_days"]
-SEASON_GAMES = {"eng.1": 38, "esp.1": 38, "ita.1": 38, "ger.1": 34, "fra.1": 34, "usa.1": 34}
+SEASON_GAMES = {"eng.1": 38, "esp.1": 38, "ita.1": 38, "ger.1": 34, "fra.1": 34, "usa.1": 34, "ksa.1": 34}
 K = 3.0                  # prior strength, in 90-minute games, for shrinking a player's rate toward the average
 MIN_TRAIN = 3000         # fewer player-matches than this and no model is fitted: baseline only
 MIN_TEST = 500
