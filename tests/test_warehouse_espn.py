@@ -100,3 +100,19 @@ def test_warehouse_totals_match_the_site_leaderboard_numbers(tmp_path):
         "from espn_raw.players p join espn_raw.lineups l using (league, event_id, athlete_id) group by 1").fetchall()}
     con.close()
     assert wh == site
+
+
+def test_repeated_play_ids_get_a_suffix_and_a_loader_version_bump_reloads_everything(tmp_path, monkeypatch):
+    from pitchline import warehouse_espn as w
+
+    s, db = LocalStore(tmp_path / "d"), str(tmp_path / "w.duckdb")
+    m = rec("1")
+    m["shots"] = [m["shots"][0], dict(m["shots"][0]), dict(m["shots"][0])]
+    put(s, m)
+    load(s, db)
+    con = duckdb.connect(db)
+    assert sorted(r[0] for r in con.execute("select play_id from espn_raw.shots").fetchall()) == ["p1", "p1~1", "p1~2"]
+    con.close()
+    assert load(s, db)["loaded"] == 0
+    monkeypatch.setattr(w, "LOADER_VERSION", w.LOADER_VERSION + 1)
+    assert load(s, db)["loaded"] == 1

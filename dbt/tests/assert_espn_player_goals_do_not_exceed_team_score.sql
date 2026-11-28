@@ -1,3 +1,6 @@
+{{ config(severity='warn') }}
+-- A warning, not a failure: ESPN's player goals and team score disagree in a few matches (a feed problem,
+-- not a pipeline one), and the rows below are the matches to look at.
 -- Own goals are stored separately, so a team's players can never have scored more than the team's score.
 with scored as (
     select match_id, team, sum(goals) as player_goals from {{ ref('fct_espn_player_match') }} group by 1, 2

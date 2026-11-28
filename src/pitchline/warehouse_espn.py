@@ -24,6 +24,7 @@ from .schemas import validate_record
 from .storage import Store, get_store
 
 PREFIX = "espn/matches/"
+LOADER_VERSION = 2          # bump when the loaded rows change shape: every file is then reloaded once
 log = logging.getLogger("pitchline.warehouse")
 
 DDL = """
@@ -58,9 +59,23 @@ def _int(v):
         return None
 
 
+def unique_play_ids(shots: list[dict]) -> list[str]:
+    """ESPN sometimes repeats a play id inside one match (and text-derived ids can collide). The second and later
+    use of an id gets a "~n" suffix, so every shot has a unique key, and dbt can still warn about the repeats."""
+    seen: dict[str, int] = {}
+    out = []
+    for i, s in enumerate(shots):
+        pid = str(s.get("play_id", i))
+        n = seen.get(pid, 0)
+        seen[pid] = n + 1
+        out.append(pid if n == 0 else f"{pid}~{n}")
+    return out
+
+
 def rows_for(rec: dict, now: datetime) -> dict[str, list[tuple]]:
     """One match record -> the rows for each raw table."""
     lg, eid = rec["league"], str(rec["event_id"])
+    play_ids = unique_play_ids(rec.get("shots") or [])
     home = next((t for t in rec["teams"] if t.get("home")), rec["teams"][0])
     away = next(t for t in rec["teams"] if t is not home)
     return {
@@ -72,7 +87,7 @@ def rows_for(rec: dict, now: datetime) -> dict[str, list[tuple]]:
                     for p in rec.get("players") or []],
         "lineups": [(lg, eid, p["team"], p.get("athlete_id") or None, p.get("player"), p.get("starter"),
                      p.get("minutes")) for p in rec.get("lineup") or []],
-        "shots": [(lg, eid, str(s.get("play_id", i)), s.get("team"), s.get("player"), s.get("assist_player"),
+        "shots": [(lg, eid, play_ids[i], s.get("team"), s.get("player"), s.get("assist_player"),
                    s["outcome"], s.get("on_target"), _int(s.get("period")), s.get("seconds"),
                    s.get("x"), s.get("y"), s.get("body_part"), s.get("situation"))
                   for i, s in enumerate(rec.get("shots") or [])],
@@ -90,7 +105,8 @@ def load(store: Store, db_path: str, workers: int = 16, now: datetime | None = N
     try:
         con.execute(DDL)
         known = dict(con.execute("select key, fingerprint from espn_raw.load_manifest").fetchall())
-        todo = sorted(k for k, fp in prints.items() if known.get(k) != fp and k.endswith(".json"))
+        tag = lambda fp: f"{fp}|v{LOADER_VERSION}"  # noqa: E731
+        todo = sorted(k for k, fp in prints.items() if known.get(k) != tag(fp) and k.endswith(".json"))
         gone = sorted(set(known) - set(prints))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             recs = list(pool.map(lambda k: json.loads(store.read_bytes(k)), todo))
@@ -114,7 +130,7 @@ def load(store: Store, db_path: str, workers: int = 16, now: datetime | None = N
                 stats["loaded"] += 1
                 status = "loaded"
             con.execute("insert or replace into espn_raw.load_manifest values (?, ?, ?, ?)",
-                        [key, prints[key], status, now])
+                        [key, tag(prints[key]), status, now])
         stats["seconds"] = round((datetime.now(timezone.utc) - t0).total_seconds(), 2)
         con.execute("insert into espn_raw.load_runs values (?, ?, ?, ?, ?, ?, ?)",
                     [now, stats["seen"], stats["loaded"], stats["unchanged"], stats["removed"], stats["invalid"],

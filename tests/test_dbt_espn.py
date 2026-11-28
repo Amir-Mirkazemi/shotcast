@@ -60,7 +60,33 @@ def test_models_build_and_every_test_passes(tmp_path):
 
 
 def test_a_data_test_fails_when_the_data_is_wrong(tmp_path):
-    db = fill(tmp_path, [match("1", "2025-09-01T14:00Z", goals_x=5)])      # 5 goals, but the team scored 2
+    m = match("1", "2025-09-01T14:00Z")
+    m["players"][0]["athlete_id"] = ""            # a stat line with no athlete id is dropped by the models...
+    db = fill(tmp_path, [m])
+    con = duckdb.connect(db)
+    con.execute("update espn_raw.lineups set minutes = 400 where athlete_id = '11'")   # ...and bad minutes slip in
+    con.close()
     res = run_dbt(db, tmp_path, "build", "--select", "tag:espn")
     assert res.returncode != 0
-    assert "assert_espn_player_goals_do_not_exceed_team_score" in res.stdout
+    assert "assert_espn_minutes_in_range" in res.stdout
+
+
+def test_lineup_only_players_and_repeated_play_ids_do_not_break_the_models(tmp_path):
+    m = match("1", "2025-09-01T14:00Z")
+    m["lineup"].append({"team": "Arsenal", "athlete_id": "99", "player": "Bench", "starter": False, "minutes": 12})
+    dup = dict(m["shots"][0])                                   # the same ESPN play id twice in one match
+    m["shots"].append(dup)
+    db = fill(tmp_path, [m])
+    res = run_dbt(db, tmp_path, "build", "--select", "tag:espn")
+    assert res.returncode == 0, res.stdout[-2500:]
+    con = duckdb.connect(db, read_only=True)
+    assert con.execute("select count(*) from main.dim_espn_player where athlete_id = '99'").fetchone()[0] == 1
+    assert con.execute("select count(distinct shot_id) = count(*) from main.fct_espn_shot").fetchone()[0]
+    con.close()
+    assert "assert_espn_play_ids_are_unique_in_the_feed" in res.stdout and "WARN" in res.stdout
+
+
+def test_score_mismatch_in_the_feed_is_a_warning_not_a_failure(tmp_path):
+    db = fill(tmp_path, [match("1", "2025-09-01T14:00Z", goals_x=5)])
+    res = run_dbt(db, tmp_path, "build", "--select", "tag:espn")
+    assert res.returncode == 0 and "WARN" in res.stdout
