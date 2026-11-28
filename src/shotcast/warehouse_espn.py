@@ -8,7 +8,7 @@ models (`dbt/models/espn`). It only touches what changed:
 * new or changed files are re-read, validated and swapped in (old rows for that match deleted, new rows
   inserted, in one transaction); unchanged files are never downloaded; files that disappeared are removed.
 
-Run: python -m pitchline.warehouse_espn --root s3://bucket/pitchline --db warehouse/pitchline.duckdb
+Run: python -m shotcast.warehouse_espn --root s3://bucket/shotcast --db warehouse/shotcast.duckdb
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from .storage import Store, get_store
 
 PREFIX = "espn/matches/"
 LOADER_VERSION = 2          # bump when the loaded rows change shape: every file is then reloaded once
-log = logging.getLogger("pitchline.warehouse")
+log = logging.getLogger("shotcast.warehouse")
 
 DDL = """
 create schema if not exists espn_raw;
@@ -153,8 +153,8 @@ def _delete_match(con, key: str) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--root", help="storage root (default: PITCHLINE_ROOT)")
-    ap.add_argument("--db", default=os.environ.get("PITCHLINE_WAREHOUSE", "warehouse/pitchline.duckdb"))
+    ap.add_argument("--root", help="storage root (default: SHOTCAST_ROOT)")
+    ap.add_argument("--db", default=os.environ.get("SHOTCAST_WAREHOUSE", "warehouse/shotcast.duckdb"))
     a = ap.parse_args(argv)
     configure()
     store = get_store(a.root)

@@ -1,7 +1,7 @@
 """Saudi Pro League backfill from API-Football (free plan: seasons 2022-2024).
 
 Resumable and quota-aware: stops before the daily limit, never re-fetches a saved match.
-Run:  python -m pitchline.saudi         (env APIFOOTBALL_KEY, PITCHLINE_ROOT)
+Run:  python -m shotcast.saudi         (env APIFOOTBALL_KEY, SHOTCAST_ROOT)
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ BASE = "https://v3.football.api-sports.io"
 LEAGUE = 307
 SEASONS = [2022, 2023, 2024]
 DAILY_BUDGET = 90
-log = logging.getLogger("pitchline.saudi")
+log = logging.getLogger("shotcast.saudi")
 
 
 def run(store: Store, key: str, opener=None, budget: int = DAILY_BUDGET, sleep=time.sleep) -> bool:

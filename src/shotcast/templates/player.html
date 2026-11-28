@@ -16,6 +16,19 @@
 <p class="note">No located shots are stored for this player yet.</p>
 {% endif %}
 
+{% if profile and profile.bars %}
+<h2>How he compares<small>percentile among {{ profile.pool|thousands }} players with at least {{ profile.pool_min|thousands }} minutes</small></h2>
+<div class="pctbars">{% for b in profile.bars %}<div class="pct"><span class="pl">{{ b.label }}</span><span class="pb" role="img" aria-label="{{ b.label }}: {{ b.value }}, percentile {{ b.pct }}"><i style="--w:{{ b.pct }}%"></i></span><span class="pv">{{ b.value }}</span><span class="pp">{{ b.pct }}</span></div>{% endfor %}</div>
+<p class="note">A bar at 90 means higher than 90% of the pool. Every player in the stored data is in the pool whatever his position, and there is no position data, so defenders and midfielders rank low on shooting measures. Rates use only matches with a stored lineup.</p>
+{% elif profile and not profile.in_pool %}
+<p class="note">Percentiles and similar players need at least {{ profile.pool_min|thousands }} minutes of known playing time. He has fewer in the stored data.</p>
+{% endif %}
+{% if profile and profile.similar %}
+<h2>Similar players<small>closest shooting profile</small></h2>
+<ul class="similar">{% for o in profile.similar %}<li>{% if o.url %}<a href="{{ o.url }}">{{ o.name }}</a>{% else %}<span>{{ o.name }}</span>{% endif %}<small>{{ o.team }}</small><b>{{ o.sim }}</b></li>{% endfor %}</ul>
+<p class="note">Cosine similarity of per-90 shots, on target, goals, assists, xG and xA, average shot distance, share of headers and xG per shot, each scaled across the pool. 100 is an identical profile. It compares how players shoot, not how good they are.</p>
+{% endif %}
+
 {% if form %}
 <h2>Form<small>shots on target per match, with 5- and 10-match averages</small></h2>
 <div class="chartbox"><div class="chart tall" role="img" aria-label="Shots on target per match with rolling averages" data-form='{{ form|tojson }}'></div></div>

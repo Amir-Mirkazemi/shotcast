@@ -29,7 +29,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
-          PITCHLINE_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
+          SHOTCAST_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
           IN_LEAGUE: ${{ github.event.inputs.league }}
           IN_TOP: ${{ github.event.inputs.top }}
           IN_PLAYER: ${{ github.event.inputs.player }}
@@ -37,7 +37,7 @@ jobs:
           ARGS="--top ${IN_TOP:-10}"
           [ -n "$IN_LEAGUE" ] && ARGS="$ARGS --league $IN_LEAGUE"
           if [ -n "$IN_PLAYER" ]; then
-            python -m pitchline.leaderboard $ARGS --player "$IN_PLAYER"
+            python -m shotcast.leaderboard $ARGS --player "$IN_PLAYER"
           else
-            python -m pitchline.leaderboard $ARGS
+            python -m shotcast.leaderboard $ARGS
           fi

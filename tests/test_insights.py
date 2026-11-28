@@ -1,6 +1,6 @@
 import pytest
 
-from pitchline import insights as ins
+from shotcast import insights as ins
 
 
 def _rec(eid, date, lg="eng.1", sots=None, lineup=True, team="A", opp="B"):

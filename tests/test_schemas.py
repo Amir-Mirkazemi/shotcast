@@ -1,7 +1,7 @@
 import json
 
-from pitchline.schemas import quarantine, scan, validate_record
-from pitchline.storage import LocalStore
+from shotcast.schemas import quarantine, scan, validate_record
+from shotcast.storage import LocalStore
 
 
 def rec(**over):

@@ -1,7 +1,7 @@
 import boto3
 from moto import mock_aws
 
-from pitchline.storage import LocalStore, S3Store, get_store
+from shotcast.storage import LocalStore, S3Store, get_store
 
 
 def test_local_roundtrip_and_listing(tmp_path):
@@ -24,15 +24,15 @@ def test_local_overwrite_is_clean(tmp_path):
 @mock_aws
 def test_s3_store_roundtrip_with_prefix():
     boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="test-bucket")
-    s = S3Store("test-bucket", "pitchline", client=boto3.client("s3", region_name="us-east-1"))
+    s = S3Store("test-bucket", "shotcast", client=boto3.client("s3", region_name="us-east-1"))
     assert not s.exists("raw/x.json")
     s.write_bytes("raw/x.json", b"hi")
     assert s.exists("raw/x.json") and s.read_bytes("raw/x.json") == b"hi"
     assert s.list_keys("raw") == ["raw/x.json"]
-    assert s.uri("raw/x.json") == "s3://test-bucket/pitchline/raw/x.json"
+    assert s.uri("raw/x.json") == "s3://test-bucket/shotcast/raw/x.json"
 
 
 def test_get_store_picks_backend(tmp_path, monkeypatch):
     assert isinstance(get_store(str(tmp_path)), LocalStore)
-    monkeypatch.setenv("PITCHLINE_ROOT", str(tmp_path))
+    monkeypatch.setenv("SHOTCAST_ROOT", str(tmp_path))
     assert isinstance(get_store(), LocalStore)

@@ -1,6 +1,6 @@
 import json
 
-from pitchline.health import log_run, summarize_dbt
+from shotcast.health import log_run, summarize_dbt
 
 
 def test_log_run_appends_lines(tmp_path):

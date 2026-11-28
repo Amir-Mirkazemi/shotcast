@@ -1,11 +1,11 @@
 # Run `make help` to see what each target does.
 .DEFAULT_GOAL := help
 PY ?= python
-export PITCHLINE_ROOT ?= data
-export PITCHLINE_BRONZE ?= ../data/bronze
-export PITCHLINE_WAREHOUSE ?= ../warehouse/pitchline.duckdb
+export SHOTCAST_ROOT ?= data
+export SHOTCAST_BRONZE ?= ../data/bronze
+export SHOTCAST_WAREHOUSE ?= ../warehouse/shotcast.duckdb
 export DBT_PROFILES_DIR ?= .
-PITCHLINE_WAREHOUSE_ABS ?= $(CURDIR)/warehouse/pitchline.duckdb
+SHOTCAST_WAREHOUSE_ABS ?= $(CURDIR)/warehouse/shotcast.duckdb
 
 help:  ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -20,33 +20,33 @@ lint:  ## Style check
 	ruff check .
 
 ingest:  ## Download raw StatsBomb files (skips files you already have)
-	$(PY) -m pitchline ingest
+	$(PY) -m shotcast ingest
 
 bronze:  ## Convert raw JSON to Parquet
-	$(PY) -m pitchline bronze
+	$(PY) -m shotcast bronze
 
 dbt:  ## Build the warehouse and run all 44 data tests
 	mkdir -p warehouse && cd dbt && dbt build --exclude tag:espn
 
 health:  ## Write the dbt test summary the app's Data health page reads
-	$(PY) -m pitchline dbt-summary
+	$(PY) -m shotcast dbt-summary
 
 all: ingest bronze dbt health  ## Whole pipeline, end to end
 
 sample:  ## Quick run: 3 matches, same steps (what CI does)
-	$(PY) -m pitchline all --config config/ci_sources.yml --limit 3
+	$(PY) -m shotcast all --config config/ci_sources.yml --limit 3
 	mkdir -p warehouse && cd dbt && dbt build --exclude tag:espn
-	$(PY) -m pitchline dbt-summary
+	$(PY) -m shotcast dbt-summary
 
 espn:  ## Load stored ESPN matches into DuckDB (incremental), run their dbt models and tests
-	$(PY) -m pitchline.warehouse_espn --db $(PITCHLINE_WAREHOUSE_ABS)
+	$(PY) -m shotcast.warehouse_espn --db $(SHOTCAST_WAREHOUSE_ABS)
 	cd dbt && dbt build --select tag:espn
 
 validate:  ## Check every stored ESPN match file against the data contract
-	$(PY) -c "from pitchline.schemas import scan; from pitchline.storage import get_store; import json; print(json.dumps(scan(get_store()), indent=2)[:4000])"
+	$(PY) -c "from shotcast.schemas import scan; from shotcast.storage import get_store; import json; print(json.dumps(scan(get_store()), indent=2)[:4000])"
 
 check:  ## Data health report; exits 1 when data is stale, invalid, or a test failed
-	$(PY) -m pitchline.health_check --max-days 4
+	$(PY) -m shotcast.health_check --max-days 4
 
 docs:  ## Generate and open dbt docs (lineage graph)
 	cd dbt && dbt docs generate && dbt docs serve

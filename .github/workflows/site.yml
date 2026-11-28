@@ -33,11 +33,11 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
-          PITCHLINE_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
+          SHOTCAST_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
         run: |
           OWNER=$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')
           export SITE_URL="https://${OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
-          python -m pitchline.site --out site --top 50
+          python -m shotcast.site --out site --top 50
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

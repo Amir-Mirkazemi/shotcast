@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from pitchline import site
-from pitchline.sitedata import pitch_coords, rank_map, slug
-from pitchline.storage import LocalStore
+from shotcast import site
+from shotcast.sitedata import pitch_coords, rank_map, slug
+from shotcast.storage import LocalStore
 
 
 def _put(store, league, eid, date, players, coverage="ok", lineup=None, shots=None, teams=None):
@@ -70,8 +70,8 @@ def test_build_writes_every_page_type_escapes_names_and_maps_shots(tmp_path):
 
 
 def test_per90_uses_only_matches_with_known_minutes(tmp_path):
-    from pitchline.leaderboard import read_records, totals_from_records
-    from pitchline.sitedata import build_model
+    from shotcast.leaderboard import read_records, totals_from_records
+    from shotcast.sitedata import build_model
     s = LocalStore(tmp_path)
     for i in range(10):                      # ten matches with a lineup: 900 minutes, 10 shots on target
         _put(s, "eng.1", str(i), f"2025-09-{i + 1:02d}", [_p("A", "X", 2, 1, aid="1")],
@@ -90,8 +90,8 @@ def test_build_refuses_an_empty_store(tmp_path):
 
 
 def test_combined_rows_merge_by_athlete_id_only():
-    from pitchline.leaderboard import totals_from_records
-    from pitchline.sitedata import combined_rows
+    from shotcast.leaderboard import totals_from_records
+    from shotcast.sitedata import combined_rows
 
     def rec(lg, eid, pl, lineup):
         return {"league": lg, "event_id": eid, "date": "2025-09-01", "coverage": "ok", "players": pl,
@@ -113,8 +113,8 @@ def test_combined_rows_merge_by_athlete_id_only():
 
 
 def test_combined_row_uses_the_club_of_the_newest_match():
-    from pitchline.leaderboard import totals_from_records
-    from pitchline.sitedata import combined_rows
+    from shotcast.leaderboard import totals_from_records
+    from shotcast.sitedata import combined_rows
 
     def rec(lg, eid, date, team, aid="9"):
         return {"league": lg, "event_id": eid, "date": date, "coverage": "ok",
@@ -132,8 +132,8 @@ def test_combined_row_uses_the_club_of_the_newest_match():
 def test_build_includes_new_pages_and_links(tmp_path):
     import json
 
-    from pitchline.site import build
-    from pitchline.storage import LocalStore
+    from shotcast.site import build
+    from shotcast.storage import LocalStore
     store = LocalStore(tmp_path / "s")
     for i in range(3):
         _put(store, "eng.1", str(i), f"2025-09-0{i + 1}", [_p("A", "Sam", 4, 2, aid="7")],
@@ -156,7 +156,7 @@ def test_build_includes_new_pages_and_links(tmp_path):
 
 
 def test_matchday_data_groups_and_limits():
-    from pitchline.site import matchday_data
+    from shotcast.site import matchday_data
     fc = {"matchday": [{"league": "eng.1", "event_id": "1", "player": f"P{i}", "team": "A", "pred": 1 - i / 10}
                        for i in range(5)]}
     out = matchday_data(fc, per_match=3)

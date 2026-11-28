@@ -1,7 +1,7 @@
 import json
 
-from pitchline import leaderboard as lb
-from pitchline.storage import LocalStore
+from shotcast import leaderboard as lb
+from shotcast.storage import LocalStore
 
 
 def _put(store, league, eid, date, players, coverage="ok"):

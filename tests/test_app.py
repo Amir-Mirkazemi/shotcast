@@ -7,7 +7,7 @@ import pytest
 streamlit_testing = pytest.importorskip("streamlit.testing.v1")
 
 ROOT = Path(__file__).resolve().parents[1]
-WAREHOUSE = ROOT / "warehouse" / "pitchline.duckdb"
+WAREHOUSE = ROOT / "warehouse" / "shotcast.duckdb"
 
 pytestmark = pytest.mark.skipif(not WAREHOUSE.exists(), reason="warehouse not built (run `make all`)")
 

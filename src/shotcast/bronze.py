@@ -17,7 +17,7 @@ import pyarrow.parquet as pq
 from .config import Competition
 from .storage import Store
 
-log = logging.getLogger("pitchline.bronze")
+log = logging.getLogger("shotcast.bronze")
 
 
 def _g(d, *path):

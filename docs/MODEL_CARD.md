@@ -49,4 +49,4 @@ match-to-match noise. In simulations with known truth the ranges covered 85-90% 
 - ESPN's coordinate, minutes and substitution data have gaps; the Data health page lists them.
 
 ## Reproduce
-`python -m pitchline.forecast` (needs the stored matches). `pytest tests/test_ml.py` runs the simulation tests.
+`python -m shotcast.forecast` (needs the stored matches). `pytest tests/test_ml.py` runs the simulation tests.

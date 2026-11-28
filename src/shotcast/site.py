@@ -20,7 +20,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
 
-from . import cards
+from . import cards, playerstats, xg
 from .forecast import load_forecasts, scorecard
 from .health_check import build_report
 from .insights import (
@@ -358,10 +358,15 @@ def team_page(lg: str, t: dict, v: dict, linked: set) -> str:
 
 
 def player_page(lg: str, r: dict, shots: list[dict], ranks: dict, card: bool = False,
-                form: dict | None = None, career: list[dict] | None = None, stints: list[dict] | None = None) -> str:
+                form: dict | None = None, career: list[dict] | None = None, stints: list[dict] | None = None,
+                profile: dict | None = None) -> str:
     kpis = [("Apps", _cell(r, "apps")), ("Minutes", _cell(r, "minutes")), ("Shots", r["shots"]),
             ("On target", r["shots_on_target"]), ("Goals", r["goals"]), ("Assists", r["assists"]),
             ("On target / 90", _cell(r, "sot90"))]
+    px = (profile or {}).get("xg")
+    if px:
+        kpis += [("xG, no penalties", f"{px['xg']:.1f}"), ("Goals, no penalties", f"{px['goals']:.0f}"),
+                 ("Finishing (goals - xG)", f"{px['goals'] - px['xg']:+.1f}"), ("xA", f"{px['xa']:.1f}")]
     svg, drawn = shot_map(shots)
 
     def counts(key: str, labels: dict) -> list:
@@ -384,7 +389,7 @@ def player_page(lg: str, r: dict, shots: list[dict], ranks: dict, card: bool = F
                   legend=[("goal", "accent-hi"), ("saved", "blue"), ("woodwork", "amber"), ("off_target", "red"),
                           ("blocked", "grey")], OUTCOMES=OUTCOMES, form=form,
                   career=[{**c, "league_name": lname(c["league"])} for c in career or []], stints=stints or [],
-                  aid=r["athlete_id"])
+                  aid=r["athlete_id"], profile=profile)
 
 
 def compare_page() -> str:
@@ -504,11 +509,12 @@ def health_page(report: dict, stamp: str) -> str:
                   path="health.html", image="og-home.png", page_id="health", r=report, stamp=stamp)
 
 
-def method_page(model: dict, stamp: str) -> str:
+def method_page(model: dict, stamp: str, xg_card: dict | None = None) -> str:
     rows = [{"name": lname(lg), **c, "pct": 100 * c["ok"] / c["matches"] if c["matches"] else 0, "span": _span(c)}
             for lg, c in sorted(((k, v["cov"]) for k, v in model["leagues"].items()), key=lambda kv: lname(kv[0]))]
     return render("method.html", title=f"Method and data quality | {SITE_NAME}", desc="", path="method.html",
-                  image="og-home.png", page_id="method", stamp=stamp, rows=rows, min_per90=MIN_MINUTES_PER90)
+                  image="og-home.png", page_id="method", stamp=stamp, rows=rows, min_per90=MIN_MINUTES_PER90,
+                  xg=xg_card or {}, xg_names=xg.NAMES)
 
 
 # ---------------------------------------------------------------- build
@@ -541,7 +547,8 @@ def _match_pages(recs: list[dict], preds: dict) -> dict[str, str]:
     return {match_url(lg, eid): match_page(v) for (lg, eid), v in views.items()}
 
 
-def _compare_files(allrows: list[dict], linked: set, model: dict, career: dict) -> dict[str, str]:
+def _compare_files(allrows: list[dict], linked: set, model: dict, career: dict,
+                   prof: dict | None = None) -> dict[str, str]:
     """compare.json (one entry per player with a page) and one small shots file per player, loaded on demand."""
     index, files = [], {}
     for r in allrows:
@@ -554,6 +561,9 @@ def _compare_files(allrows: list[dict], linked: set, model: dict, career: dict) 
                       "shots": r["shots"], "sot": r["shots_on_target"], "goals": r["goals"], "assists": r["assists"],
                       "sot90": None if r["sot90"] is None else round(r["sot90"], 2),
                       "kit": list(kit(r["team"], r["player"]))})
+        px = ((prof or {}).get(aid) or {}).get("xg")
+        if px:                                                  # only when the xG model passed its checks
+            index[-1].update({"xg": round(px["xg"], 1), "xa": round(px["xa"], 1)})
         files[f"shots/{aid}.json"] = json.dumps(model["shots"].get(key, []), separators=(",", ":"))
     files["compare.json"] = json.dumps(index, separators=(",", ":"), ensure_ascii=False)
     return files
@@ -572,6 +582,10 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
     report = build_report(store, recs, invalid, today=(now.date() if now else None))
     linked_all = {(lg, pid) for lg, v in model["leagues"].items() for pid in featured_ids(v["rows"])}
     allrows = combined_rows(players)
+    xg_card, scored = xg.score_shots(recs)
+    aid_url = {r["athlete_id"]: player_url(r["best_league"], r["best_pid"]) for r in allrows
+               if r["athlete_id"] and (r["best_league"], r["best_pid"]) in linked_all}
+    prof = playerstats.profiles(allrows, scored, aid_url)
     watch = []
     for r in sorted(allrows, key=lambda r: (-r["shots_on_target"], r["player"])):
         key = (r["best_league"], r["best_pid"])
@@ -587,11 +601,11 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
     files: dict[str, str] = {
         ".nojekyll": "",
         "index.html": index_page(model, len(players), stamp, home_notes, watch),
-        "method.html": method_page(model, stamp), "about.html": about_page(), "live.html": live_page(latest_fc),
+        "method.html": method_page(model, stamp, xg_card), "about.html": about_page(), "live.html": live_page(latest_fc),
         "how.html": how_page(model, stamp), "news.html": news_page(shot_notes(recs, players, lname, limit=60), linked_all),
         "health.html": health_page(report, stamp), "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc), "compare.html": compare_page()}
     files.update(match_files)
-    files.update(_compare_files(allrows, linked_all, model, career))
+    files.update(_compare_files(allrows, linked_all, model, career, prof))
     search = []
     spans = ([c["first"] for c in coverage.values() if c.get("first")]
              + [c["last"] for c in coverage.values() if c.get("last")])
@@ -609,7 +623,8 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
                     lg, r, model["shots"].get((lg, r["pid"]), []), ranks, card=cards.available(),
                     form=form_chart(series.get(aid, [])) if aid else None,
                     career=career_table(career[aid]) if aid in career else None,
-                    stints=club_stints(career[aid]) if aid in career else None)
+                    stints=club_stints(career[aid]) if aid in career else None,
+                    profile=prof.get(aid) if aid else None)
             search.append({"player": r["player"], "team": r["team"], "league": lg, "league_name": lname(lg),
                            "url": player_url(lg, r["pid"]) if r["pid"] in linked else "",
                            "rank": ranks["sot"][r["pid"]], "field": len(v["rows"]), "shots": r["shots"],
@@ -657,7 +672,7 @@ def preview_images(out: Path, model: dict, players: dict, coverage: dict, allrow
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--root", help="storage root (default: PITCHLINE_ROOT)")
+    ap.add_argument("--root", help="storage root (default: SHOTCAST_ROOT)")
     ap.add_argument("--out", default="site")
     ap.add_argument("--top", type=int, default=50)
     a = ap.parse_args(argv)

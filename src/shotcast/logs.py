@@ -1,6 +1,6 @@
 """Structured logging and per-run records.
 
-JSON log lines (one object per line) in CI or when PITCHLINE_LOG_FORMAT=json, so a log search can
+JSON log lines (one object per line) in CI or when SHOTCAST_LOG_FORMAT=json, so a log search can
 filter on fields such as ``league`` or ``failed``. Plain text otherwise. Every pipeline run also writes a
 small summary file to ``runs/`` in storage, which the Data health page reads.
 """
@@ -29,7 +29,7 @@ class JsonFormatter(logging.Formatter):
 
 def configure(level: int = logging.INFO, json_logs: bool | None = None) -> None:
     if json_logs is None:
-        json_logs = os.environ.get("PITCHLINE_LOG_FORMAT") == "json" or bool(os.environ.get("CI"))
+        json_logs = os.environ.get("SHOTCAST_LOG_FORMAT") == "json" or bool(os.environ.get("CI"))
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter() if json_logs
                          else logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))

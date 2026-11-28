@@ -11,8 +11,8 @@ duckdb = pytest.importorskip("duckdb")
 DBT = shutil.which("dbt")
 pytestmark = pytest.mark.skipif(DBT is None, reason="dbt is not installed")
 
-from pitchline.storage import LocalStore  # noqa: E402
-from pitchline.warehouse_espn import load  # noqa: E402
+from shotcast.storage import LocalStore  # noqa: E402
+from shotcast.warehouse_espn import load  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,7 +32,7 @@ def match(eid, date, goals_x=1, minutes=90):
 
 
 def run_dbt(db, tmp_path, *args):
-    env = {**os.environ, "PITCHLINE_WAREHOUSE": db, "DBT_PROFILES_DIR": str(ROOT / "dbt")}
+    env = {**os.environ, "SHOTCAST_WAREHOUSE": db, "DBT_PROFILES_DIR": str(ROOT / "dbt")}
     return subprocess.run([DBT, *args, "--project-dir", str(ROOT / "dbt"), "--target-path", str(tmp_path / "t"),
                            "--log-path", str(tmp_path / "l")], env=env, capture_output=True, text=True)
 
@@ -97,7 +97,7 @@ def test_the_statsbomb_pipeline_never_builds_the_espn_models():
     (this broke CI once: `make sample` built everything and failed on the missing espn_raw schema)."""
     import re
 
-    for path in ("Makefile", "orchestration/dags/pitchline_daily.py"):
+    for path in ("Makefile", "orchestration/dags/shotcast_daily.py"):
         for line in (ROOT / path).read_text().splitlines():
             runs_dbt = re.search(r"(&& |\{DBT\} )(dbt )?build", line)          # a command, not a description
             if runs_dbt and "tag:espn" not in line:

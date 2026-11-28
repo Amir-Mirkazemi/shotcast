@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block body %}
+{{ m.head("About " ~ SITE_NAME, "#8fa3c7") }}
+<p class="note">{{ SITE_NAME }} is a soccer data project built end to end by <b>{{ OWNER }}</b>, a data engineer completing an M.S. in Data Science at UC San Diego. It tracks who shoots and who finishes across nine competitions, shows where shots come from, forecasts shots on target, and keeps a public scorecard of how those forecasts turn out.</p>
+<h2>What is under it</h2>
+<ul class="plain">
+<li>A scheduled pipeline (Python, GitHub Actions) downloads match data, parses the commentary into one row per shot, checks every match against the source's own totals, and stores one JSON file per match in Amazon S3.</li>
+<li>This site is rebuilt from those files automatically, so a finished match appears without manual work.</li>
+<li>Forecasts and expected goals (xG) come from models trained on past matches and judged in walk-forward tests against simple baselines; the results are on the <a href="forecast.html">forecast page</a> and the <a href="method.html">method page</a>, including when a model is no better than its baseline.</li>
+<li>Everything is open source and tested; see <a href="how.html">how it is built</a> and <a href="method.html">the method and data quality</a>.</li>
+</ul>
+<h2 id="data">Data source and rights</h2>
+<ul class="plain">
+<li>Match statistics come from ESPN's public website endpoints. They are unofficial and undocumented, and can change or disappear without notice.</li>
+<li>The pipeline keeps only what it derives from each match: teams, score, player statistics and parsed shot events. Raw ESPN responses are neither stored nor published, and no ESPN feed is offered for download here.</li>
+<li>This is a non-commercial portfolio and learning project: no ads, no accounts, no paid features. It is not betting advice and the forecasts are not a prediction service.</li>
+<li>It is not affiliated with or endorsed by ESPN, any league, club or player. Names belong to their owners. The site uses no logos or photographs: the shirts are drawn illustrations in club colours.</li>
+<li>If you own rights to any of this data and want something changed or removed, contact me below and I will act on it.</li>
+</ul>
+<h2>Contact</h2>
+<p class="note">{% for name, url in OWNER_LINKS %}{% if not loop.first %} · {% endif %}<a href="{{ url }}">{{ name }}</a>{% endfor %}</p>
+{% endblock %}

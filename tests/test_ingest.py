@@ -4,9 +4,9 @@ import pytest
 import requests
 from conftest import FakeResponse, FakeSession, make_events
 
-from pitchline.config import Competition
-from pitchline.ingest import IngestError, fetch_json, ingest
-from pitchline.storage import LocalStore
+from shotcast.config import Competition
+from shotcast.ingest import IngestError, fetch_json, ingest
+from shotcast.storage import LocalStore
 
 COMP = (Competition(99, 1, "Test Cup"),)
 BASE = "http://x/data"

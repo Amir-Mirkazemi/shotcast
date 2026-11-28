@@ -13,8 +13,8 @@ import pytest
 pw = pytest.importorskip("playwright.sync_api")
 expect = pw.expect
 
-from pitchline import site  # noqa: E402
-from pitchline.storage import LocalStore  # noqa: E402
+from shotcast import site  # noqa: E402
+from shotcast.storage import LocalStore  # noqa: E402
 
 
 def _put(store, league, eid, date, players, lineup, shots, teams):

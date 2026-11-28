@@ -1,4 +1,4 @@
-from pitchline.espn_shots import parse_shots
+from shotcast.espn_shots import parse_shots
 
 
 def _play(ptype, text, parts, x=90.0, y=50.0):

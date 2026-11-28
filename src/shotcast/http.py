@@ -17,7 +17,7 @@ def get_json(url: str, headers: dict | None = None, opener=urllib.request.urlope
              tries: int = 4, sleep=time.sleep):
     """Return (parsed_json, response_headers). 4xx (except 429) fails fast; others retry."""
     for attempt in range(tries):
-        req = urllib.request.Request(url, headers={"User-Agent": "pitchline/0.2", **(headers or {})})
+        req = urllib.request.Request(url, headers={"User-Agent": "shotcast/0.2", **(headers or {})})
         try:
             with opener(req, timeout=30) as r:
                 return json.loads(r.read().decode()), r.headers

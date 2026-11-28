@@ -1,4 +1,4 @@
-"""Pitchline app: who creates the best chances? Reads the dbt-built DuckDB warehouse (read-only)."""
+"""Shotcast app: who creates the best chances? Reads the dbt-built DuckDB warehouse (read-only)."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
-WAREHOUSE = Path(os.environ.get("PITCHLINE_WAREHOUSE", ROOT / "warehouse" / "pitchline.duckdb"))
-HEALTH = Path(os.environ.get("PITCHLINE_HEALTH", ROOT / "health"))
+WAREHOUSE = Path(os.environ.get("SHOTCAST_WAREHOUSE", ROOT / "warehouse" / "shotcast.duckdb"))
+HEALTH = Path(os.environ.get("SHOTCAST_HEALTH", ROOT / "health"))
 
-st.set_page_config(page_title="Pitchline", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="Shotcast", page_icon="⚽", layout="wide")
 
 
 @st.cache_data(show_spinner=False)
@@ -168,7 +168,7 @@ def page_health() -> None:
 
 
 def main() -> None:
-    st.sidebar.title("⚽ Pitchline")
+    st.sidebar.title("⚽ Shotcast")
     if not WAREHOUSE.exists():
         st.error(f"Warehouse not found at {WAREHOUSE}. Run `make all` first.")
         st.stop()

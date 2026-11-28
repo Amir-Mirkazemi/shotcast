@@ -2,9 +2,9 @@ version: 2
 
 sources:
   - name: bronze
-    description: Flattened StatsBomb open data written by `pitchline bronze` (Parquet).
+    description: Flattened StatsBomb open data written by `shotcast bronze` (Parquet).
     meta:
-      external_location: "read_parquet('{{ env_var('PITCHLINE_BRONZE', '../data/bronze') }}/{name}/*.parquet', union_by_name=true)"
+      external_location: "read_parquet('{{ env_var('SHOTCAST_BRONZE', '../data/bronze') }}/{name}/*.parquet', union_by_name=true)"
     tables:
       - name: matches
       - name: events

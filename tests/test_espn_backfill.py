@@ -2,9 +2,9 @@ import json
 from datetime import date
 from itertools import chain, repeat
 
-from pitchline import espn_backfill as eb
-from pitchline.http import HttpStatus
-from pitchline.storage import LocalStore
+from shotcast import espn_backfill as eb
+from shotcast.http import HttpStatus
+from shotcast.storage import LocalStore
 
 
 def _shot(pid, team, ptype, text="Attempt missed. A (T) right footed shot from outside the box is too high."):
@@ -127,7 +127,7 @@ def test_player_stats_from_espn_are_stored(tmp_path):
 
 
 def test_suspicious_lines_flags_unparsed_and_duplicate_shots():
-    from pitchline.espn_shots import parse_shots
+    from shotcast.espn_shots import parse_shots
     odd = {"text": "Z (Home) hits the bar with a volley.", "play": {"id": "77", "type": {"text": "Volley"}}}
     s = {"commentary": [_shot("1", "Home", "Shot Off Target"), _shot("2", "Home", "Shot Off Target"), odd]}
     out = eb.suspicious_lines(s, parse_shots(s, "9", "eng.1"))
@@ -136,7 +136,7 @@ def test_suspicious_lines_flags_unparsed_and_duplicate_shots():
 
 
 def test_inconsistent_shot_typed_play_is_reported():
-    from pitchline.espn_shots import parse_shots
+    from shotcast.espn_shots import parse_shots
     bad = _shot("5", "Home", "Shot On Target", text="Foul by X (Home).")
     s = {"commentary": [bad]}
     out = eb.suspicious_lines(s, parse_shots(s, "9", "eng.1"))
@@ -150,7 +150,7 @@ def test_foul_and_var_penalty_lines_are_not_flagged_as_unparsed():
 
 
 def test_text_only_parsed_shot_is_not_flagged_as_unparsed():
-    from pitchline.espn_shots import parse_shots
+    from shotcast.espn_shots import parse_shots
     line = {"sequence": 7, "text": "Attempt missed. J K (Bournemouth) left footed shot is wide.", "time": {"value": 9.0}}
     s = {"boxscore": {"teams": [{"team": {"displayName": "AFC Bournemouth"}}]}, "commentary": [line]}
     shots = parse_shots(s, "9", "eng.1")
@@ -175,7 +175,7 @@ def test_empty_boxscore_falls_back_to_player_stats_and_adds_penalties():
 
 
 def test_stoppage_time_repeats_are_not_flagged_as_duplicates():
-    from pitchline.espn_shots import parse_shots
+    from shotcast.espn_shots import parse_shots
     s = {"commentary": [_shot("1", "Home", "Shot Off Target"), _shot("2", "Home", "Shot Off Target")]}
     shots = parse_shots(s, "9", "eng.1")
     for sh in shots:
@@ -231,16 +231,16 @@ def test_upgrade_redownloads_only_old_layout_files(tmp_path):
 def test_recent_targets_cover_every_tracked_competition():
     from datetime import date
 
-    from pitchline.espn_backfill import recent_targets
-    from pitchline.live import LEAGUES
+    from shotcast.espn_backfill import recent_targets
+    from shotcast.live import LEAGUES
     t = recent_targets(date(2026, 11, 24), 5)
     assert [x["league"] for x in t] == LEAGUES
     assert t[0] == {"league": "eng.1", "from": "2026-11-19", "to": "2026-11-24"}
 
 
 def test_league_all_expands_to_every_tracked_competition(monkeypatch, tmp_path):
-    import pitchline.espn_backfill as eb
-    from pitchline.live import LEAGUES
+    import shotcast.espn_backfill as eb
+    from shotcast.live import LEAGUES
     seen = []
     monkeypatch.setattr(eb, "backfill", lambda store, league, *a, **k: seen.append(league) or {
         "listed": 0, "new": 0, "skipped": 0, "failed": 0, "stopped_early": False, "mismatch": 0, "ok": 0})

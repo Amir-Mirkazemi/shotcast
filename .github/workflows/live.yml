@@ -26,7 +26,7 @@ jobs:
           python-version: "3.12"
       - run: pip install requests && pip install -e . --no-deps
       - name: Fetch scores
-        run: python -m pitchline.live --out live.json
+        run: python -m shotcast.live --out live.json
       - name: Publish to the live-data branch
         run: |
           mkdir out && mv live.json out/

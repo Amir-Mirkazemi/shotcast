@@ -1,6 +1,6 @@
 """Near-live scores for every competition: one small JSON file, refreshed by a scheduled job.
 
-Run: python -m pitchline.live --out live.json
+Run: python -m shotcast.live --out live.json
 The job publishes the file to a branch called live-data; the Live page reads it from there.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ from .http import get_json
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 LEAGUES = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1",
            "uefa.champions", "afc.champions", "fifa.world"]
-log = logging.getLogger("pitchline.live")
+log = logging.getLogger("shotcast.live")
 
 
 def parse_event(league: str, e: dict) -> dict | None:

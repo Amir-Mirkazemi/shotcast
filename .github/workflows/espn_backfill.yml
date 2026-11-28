@@ -42,7 +42,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
-          PITCHLINE_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
+          SHOTCAST_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
           IN_LEAGUE: ${{ github.event.inputs.league }}
           IN_FROM: ${{ github.event.inputs.from }}
           IN_TO: ${{ github.event.inputs.to }}
@@ -52,7 +52,7 @@ jobs:
           FLAG=""; [ "$IN_RETRY" = "true" ] && FLAG="--retry-bad"
           [ "$IN_UPGRADE" = "true" ] && FLAG="$FLAG --upgrade"
           if [ -n "$IN_LEAGUE" ]; then
-            python -m pitchline.espn_backfill --league "$IN_LEAGUE" --from "$IN_FROM" --to "$IN_TO" --max-minutes 300 $FLAG
+            python -m shotcast.espn_backfill --league "$IN_LEAGUE" --from "$IN_FROM" --to "$IN_TO" --max-minutes 300 $FLAG
           else
-            python -m pitchline.espn_backfill --recent 5 --retry-bad --max-minutes 300 $FLAG
+            python -m shotcast.espn_backfill --recent 5 --retry-bad --max-minutes 300 $FLAG
           fi

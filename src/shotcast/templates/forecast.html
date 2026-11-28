@@ -31,6 +31,7 @@
 <div class="tablewrap"><table><thead><tr><th>Method</th><th class="n">Avg miss (MAE)</th><th class="n">Bias</th></tr></thead><tbody>
 <tr><td>Forecast</td><td class="n">{{ fmt(sc.model.mae, 3) }}</td><td class="n">{{ fmt(sc.model.bias, 3) }}</td></tr>
 <tr><td>Baseline</td><td class="n">{{ fmt(sc.baseline.mae, 3) }}</td><td class="n">{{ fmt(sc.baseline.bias, 3) }}</td></tr></tbody></table></div>
+{% if sc.played_only %}<p class="note">Only the {{ sc.played_only.n|thousands }} forecasts for players who actually played: predicted {{ sc.played_only.predicted_total|thousands }} shots on target, actual {{ sc.played_only.actual_total|thousands }} (forecast bias {{ fmt(sc.played_only.model.bias, 3) }}, baseline {{ fmt(sc.played_only.baseline.bias, 3) }}). The gap between this and the table above is players who were listed but did not play: the forecast cannot know who is rested or injured. Each team's 14 highest forecasts are kept, and picking the top of a noisy list also leans high.</p>{% endif %}
 {% if sc.prob %}<p class="note">Chance of 1+ on target, {{ sc.prob.n|thousands }} graded forecasts: the forecast said {{ "%.1f"|format(100 * sc.prob.predicted_rate) }}% on average and {{ "%.1f"|format(100 * sc.prob.actual_rate) }}% happened. Brier score {{ fmt(sc.prob.brier, 4) }} for the forecast and {{ fmt(sc.prob.brier_baseline, 4) }} for the baseline (lower is better).</p>{% endif %}
 {% endif %}
 

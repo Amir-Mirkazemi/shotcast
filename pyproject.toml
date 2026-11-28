@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pitchline"
+name = "shotcast"
 version = "0.1.0"
 description = "Soccer event-data pipeline: S3-ready ingest, Parquet bronze layer, dbt + DuckDB warehouse, Streamlit app."
 requires-python = ">=3.10"
@@ -13,7 +13,7 @@ dependencies = ["requests>=2.31,<3", "pyarrow>=15", "pyyaml>=6", "boto3>=1.34", 
 where = ["src"]
 
 [tool.setuptools.package-data]
-pitchline = ["templates/*.html", "static/*", "static/fonts/*", "static/vendor/*"]
+shotcast = ["templates/*.html", "static/*", "static/fonts/*", "static/vendor/*"]
 
 [tool.ruff]
 line-length = 110
@@ -23,9 +23,10 @@ select = ["E", "F", "I", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
-"src/pitchline/site.py" = ["E501"]   # club colour table and SVG strings
-"src/pitchline/forecast.py" = ["E501"]
-"src/pitchline/notes.py" = ["E501"]
-"src/pitchline/insights.py" = ["E501"]
-"src/pitchline/warehouse_espn.py" = ["E501"]
+"src/shotcast/site.py" = ["E501"]   # club colour table and SVG strings
+"src/shotcast/forecast.py" = ["E501"]
+"src/shotcast/notes.py" = ["E501"]
+"src/shotcast/insights.py" = ["E501"]
+"src/shotcast/warehouse_espn.py" = ["E501"]
+"src/shotcast/xg.py" = ["E501"]
 "tests/test_notes.py" = ["E501"]

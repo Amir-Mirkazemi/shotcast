@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
-from pitchline.forecast import (
+from shotcast.forecast import (
     State,
     make_forecast,
     matchday_forecast,

@@ -18,7 +18,7 @@ import requests
 from .config import Competition
 from .storage import Store
 
-log = logging.getLogger("pitchline.ingest")
+log = logging.getLogger("shotcast.ingest")
 
 TIMEOUT = (5, 30)  # connect, read seconds
 MAX_ATTEMPTS = 4

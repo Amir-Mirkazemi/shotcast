@@ -2,9 +2,9 @@ import json
 import logging
 from datetime import date, datetime, timezone
 
-from pitchline.health_check import build_report, main, problems, publish_dbt, stale
-from pitchline.logs import JsonFormatter, read_runs, record_run
-from pitchline.storage import LocalStore
+from shotcast.health_check import build_report, main, problems, publish_dbt, stale
+from shotcast.logs import JsonFormatter, read_runs, record_run
+from shotcast.storage import LocalStore
 
 
 def rec(lg, eid, day, ok=True, shots=2, located=True, lineup=True):
@@ -54,7 +54,7 @@ def test_run_records_round_trip_newest_first(tmp_path):
 
 
 def test_json_log_line_carries_extra_fields():
-    rec_ = logging.LogRecord("pitchline.espn", logging.INFO, "f.py", 1, "done %s", ("eng.1",), None)
+    rec_ = logging.LogRecord("shotcast.espn", logging.INFO, "f.py", 1, "done %s", ("eng.1",), None)
     rec_.league, rec_.failed = "eng.1", 2
     out = json.loads(JsonFormatter().format(rec_))
     assert out["msg"] == "done eng.1" and out["league"] == "eng.1" and out["failed"] == 2 and out["level"] == "INFO"

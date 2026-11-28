@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from pitchline.live import collect, parse_event
+from shotcast.live import collect, parse_event
 
 
 def ev(i, state, home="A", away="B", hs="1", as_="0"):

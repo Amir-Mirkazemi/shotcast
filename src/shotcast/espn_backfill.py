@@ -4,7 +4,7 @@ Stored per match (small): espn/matches/{league}/{event}.json containing the matc
 totals and the parsed shots, plus a coverage flag saying whether parsed shots reconcile with ESPN's
 own boxscore totals. Unofficial endpoints: keep the pace polite.
 
-Run: python -m pitchline.espn_backfill --league eng.1 --from 2023-08-01 --to 2024-06-01
+Run: python -m shotcast.espn_backfill --league eng.1 --from 2023-08-01 --to 2024-06-01
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from .schemas import quarantine, validate_record
 from .storage import Store, get_store
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
-log = logging.getLogger("pitchline.espn")
+log = logging.getLogger("shotcast.espn")
 
 
 def _daterange(a: date, b: date, step: int):

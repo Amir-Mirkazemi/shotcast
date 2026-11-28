@@ -1,5 +1,29 @@
 # Shotcast ⚽
 
+**Live site: https://amir-mirkazemi.github.io/shotcast/**
+
+Shotcast is a soccer data project built end to end: a nightly pipeline collects match data for nine competitions, validates it, and rebuilds a public website that ranks shooters, shows where shots come from, forecasts shots on target, and publishes a scorecard of how those forecasts turn out.
+
+![Shotcast home](docs/img/site-home.png)
+
+What makes it more than a dashboard:
+
+- **A data contract.** Every match file is checked against a Pydantic schema when written and again before the site is built; failures go to a quarantine folder with reasons and never reach a page.
+- **A tested warehouse.** Matches load incrementally into DuckDB and dbt builds and tests the ESPN models nightly; the [health page](https://amir-mirkazemi.github.io/shotcast/health.html) shows the latest run.
+- **Models that have to earn their place.** Forecasts use walk-forward testing and a paired bootstrap; a model is used only if it beats the baseline in most test periods and its gain holds up. The site says so when it does not. See the [model card](docs/MODEL_CARD.md).
+- **Validated expected goals.** Shot-level xG is tested the same way, cross-fitted so no shot is scored by a model that saw its match, and feeds player xG, xA and percentile profiles.
+- **A public scorecard.** Forecasts are stored before matches are played and compared with what happened.
+
+![Forecast page](docs/img/site-forecast.png)
+
+The screenshots are refreshed from the live site by the `screenshots` workflow (Actions tab, run manually).
+
+The rest of this README starts with the original StatsBomb pipeline this grew out of, then covers the website.
+
+---
+
+# Original project: StatsBomb chance-creation pipeline
+
 **An end-to-end data pipeline that answers one question: who creates the most dangerous chances in international soccer?**
 
 Raw match-event data goes in. A tested dbt warehouse and a small app come out.
@@ -62,7 +86,7 @@ I checked that these tests *fail* when they should by deliberately deleting a ma
 |---|---|
 | **Rerun-safe ingest** | Existing files are skipped and writes are atomic, so a rerun after a crash never duplicates or half-writes data. |
 | **Retries with exponential backoff, validation before writing** | The source is a free public host. A bad or empty response is rejected instead of saved. |
-| **One storage interface, two backends** | The same code runs on a laptop or in S3 (`PITCHLINE_ROOT=s3://bucket/prefix`). |
+| **One storage interface, two backends** | The same code runs on a laptop or in S3 (`SHOTCAST_ROOT=s3://bucket/prefix`). |
 | **Parquet bronze layer with an explicit schema** | The raw JSON is deeply nested; flat, typed columns make the SQL layer simple and fast. |
 | **dbt on DuckDB** | A real warehouse workflow (models, tests, docs, lineage) with no server and no cost. The S3 profile reads Parquet straight from a bucket. |
 | **Staging as tables, not views** | An early version used views over relative Parquet paths and broke whenever queried from another folder. Tables make the `.duckdb` file self-contained. |
@@ -81,8 +105,8 @@ make app            # open the Streamlit app
 Quick version (3 matches, what CI runs): `make sample`.
 Run `make help` for every target, and `make docs` for the dbt lineage graph.
 
-**Using S3 instead of local files:** set `PITCHLINE_ROOT=s3://YOUR-BUCKET/pitchline` and
-`PITCHLINE_BRONZE=s3://YOUR-BUCKET/pitchline/bronze`, make sure your AWS credentials are available,
+**Using S3 instead of local files:** set `SHOTCAST_ROOT=s3://YOUR-BUCKET/pitchline` and
+`SHOTCAST_BRONZE=s3://YOUR-BUCKET/pitchline/bronze` (the project was first called Pitchline; the S3 prefix keeps that name so existing data stays where it is), make sure your AWS credentials are available,
 and run dbt with `--target s3`.
 
 **Airflow (Docker):**
@@ -90,13 +114,13 @@ and run dbt with `--target s3`.
 echo AIRFLOW_UID=$(id -u) > orchestration/.env
 docker compose -f orchestration/docker-compose.yml up --build   # UI on http://localhost:8080
 ```
-The DAG `pitchline_daily` runs `ingest_raw -> build_bronze -> dbt_build -> dbt_summary` every day at 09:00 UTC.
+The DAG `shotcast_daily` runs `ingest_raw -> build_bronze -> dbt_build -> dbt_summary` every day at 09:00 UTC.
 
 ## Project layout
 
 ```
 config/            which competitions to load
-src/pitchline/     ingest, bronze (Parquet), storage (local/S3), health, CLI, site.py + templates/ + static/ (website)
+src/shotcast/     ingest, bronze (Parquet), storage (local/S3), health, CLI, site.py + templates/ + static/ (website)
 dbt/               staging -> intermediate -> marts, generic + singular tests
 orchestration/     Airflow DAG, Dockerfile, docker-compose
 app/               Streamlit app
@@ -120,7 +144,7 @@ before publishing analysis built on it; it requires crediting StatsBomb as the s
 
 ## Status: Shotcast (work in progress)
 
-Pitchline is being extended from a one-tournament demo into a multi-league pipeline that tracks
+Shotcast is being extended from a one-tournament demo into a multi-league pipeline that tracks
 player shot and chance creation totals across years and updates as matches finish.
 
 **Live site (Shotcast):** https://amir-mirkazemi.github.io/shotcast/
@@ -148,8 +172,7 @@ player shot and chance creation totals across years and updates as matches finis
   stats instead (the match file records which source was used).
   Known limit: ESPN counts some blocked shots as on target in its own stats, so Shots on Target uses
   ESPN's per-player roster stats, not the commentary.
-- xG estimator calibrated to StatsBomb xG, validated leave-one-competition-out
-  (competition totals within about 3%, about 0.04 error per shot).
+- `xg_model.py`: an earlier xG estimator calibrated to StatsBomb xG (not used by the website).
 - Player identity by ESPN athlete id (two players with the same name stay separate) and minutes played
   from stored lineups, with a re-download mode (`--upgrade`) that adds both to older matches.
 - Static website generated from the stored matches (competition leaderboards, player search, method and
@@ -162,8 +185,12 @@ player shot and chance creation totals across years and updates as matches finis
 - Validation of ESPN coordinates against StatsBomb on the *same* matches.
 
 **Data notes**
-- ESPN endpoints are unofficial. This repository contains code and tiny synthetic test fixtures only;
-  no ESPN or API-Football data is committed or redistributed.
+- ESPN endpoints are unofficial and undocumented. This repository contains code and tiny synthetic test fixtures
+  only; no ESPN or API-Football data is committed or redistributed. The pipeline stores parsed, derived match
+  records (teams, score, player statistics, shot events) in a private S3 bucket and does not keep or publish raw
+  ESPN responses. The website shows derived statistics for a non-commercial portfolio project, uses no logos or
+  photographs, and is not affiliated with ESPN or any league. Rights holders can ask for changes or removal
+  through the contact links on the site's About page.
 - Saudi Pro League data comes from API-Football's free plan (seasons 2022-2024) and has no shot
   locations, so it can only support a Shots on Target ranking, not the Danger ranking.
 - StatsBomb open data is used under its attribution terms. Credit: StatsBomb.
@@ -216,7 +243,7 @@ S3 (one JSON per match) -> site.py (prepares data) -> Jinja2 templates -> static
 
 | Concern | Choice | Why |
 |---|---|---|
-| Markup | Jinja2 templates in `src/pitchline/templates/` | HTML lives in templates; `site.py` only prepares plain data (dicts and lists) |
+| Markup | Jinja2 templates in `src/shotcast/templates/` | HTML lives in templates; `site.py` only prepares plain data (dicts and lists) |
 | Styling | One `style.css`, navy and emerald theme, light mode via a toggle | No build step, no CSS framework |
 | Type and icons | Inter (self-hosted) and a Lucide SVG sprite | No third-party requests at runtime |
 | Charts | Apache ECharts (self-hosted, loaded only on player pages) for breakdowns; hand-built SVG for shot maps | Interactive tooltips where it helps, crisp SVG where positions matter |

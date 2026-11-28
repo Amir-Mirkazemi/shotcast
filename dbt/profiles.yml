@@ -1,14 +1,14 @@
-pitchline:
+shotcast:
   target: local
   outputs:
     local:
       type: duckdb
-      path: "{{ env_var('PITCHLINE_WAREHOUSE', '../warehouse/pitchline.duckdb') }}"
+      path: "{{ env_var('SHOTCAST_WAREHOUSE', '../warehouse/shotcast.duckdb') }}"
       threads: 4
     # Reads the bronze layer straight from S3 using your normal AWS credentials.
     s3:
       type: duckdb
-      path: "{{ env_var('PITCHLINE_WAREHOUSE', '../warehouse/pitchline.duckdb') }}"
+      path: "{{ env_var('SHOTCAST_WAREHOUSE', '../warehouse/shotcast.duckdb') }}"
       threads: 4
       extensions: [httpfs]
       secrets:

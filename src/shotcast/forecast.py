@@ -10,7 +10,7 @@ in most periods. The spread of outcomes around each forecast is a negative binom
 measured on those out-of-sample periods, which gives "chance of at least one on target". Every forecast is
 saved before the matches, then graded on what actually happened.
 
-Run: python -m pitchline.forecast --root s3://bucket/pitchline
+Run: python -m shotcast.forecast --root s3://bucket/shotcast
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from .leaderboard import read_records
 from .live import LEAGUES, day_events
 from .storage import Store, get_store
 
-log = logging.getLogger("pitchline.forecast")
+log = logging.getLogger("shotcast.forecast")
 FEATURES = ["rate10", "rate_long", "shots10", "minutes5", "apps", "home", "team_for", "opp_against",
             "start10", "rest_days"]
 SEASON_GAMES = {"eng.1": 38, "esp.1": 38, "ita.1": 38, "ger.1": 34, "fra.1": 34, "usa.1": 34}
@@ -351,7 +351,7 @@ def scorecard(forecasts: list[dict], recs: list[dict]) -> dict:
             if p["kickoff"] > fc["asof"]:                        # made before kickoff, otherwise not a forecast
                 latest[(p["league"], p["event_id"], p["athlete_id"])] = p
     ys, mus, bs, played = [], [], [], 0
-    p1s, b1s, hit = [], [], []
+    p1s, b1s, hit, did_play = [], [], [], []
     matches = set()
     for (lg, eid, aid), p in latest.items():
         if (lg, eid) not in actual:
@@ -361,6 +361,7 @@ def scorecard(forecasts: list[dict], recs: list[dict]) -> dict:
         mus.append(p["pred"])
         bs.append(p["baseline"])
         played += mins.get(aid, 0) > 0
+        did_play.append(mins.get(aid, 0) > 0)
         matches.add((lg, eid))
         if "p1" in p and "b1" in p:                            # forecasts made after the probabilities were added
             p1s.append(p["p1"])
@@ -372,6 +373,11 @@ def scorecard(forecasts: list[dict], recs: list[dict]) -> dict:
     out = {"n": len(ys), "matches": len(matches), "played": int(played),
            "predicted_total": round(float(mu.sum()), 1), "actual_total": int(y.sum()),
            "model": _metrics(y, mu), "baseline": _metrics(y, b)}
+    pl = np.array(did_play)
+    if pl.any() and not pl.all():                      # how much of the miss is players who never got on the pitch?
+        out["played_only"] = {"n": int(pl.sum()), "predicted_total": round(float(mu[pl].sum()), 1),
+                              "actual_total": int(y[pl].sum()), "model": _metrics(y[pl], mu[pl]),
+                              "baseline": _metrics(y[pl], b[pl])}
     if p1s:
         ph, hh = np.array(p1s), np.array(hit)
         out["prob"] = {"n": len(p1s), "brier": round(ml.brier(ph, hh), 4), "brier_baseline": round(ml.brier(np.array(b1s), hh), 4),
@@ -387,7 +393,7 @@ def load_forecasts(store: Store) -> list[dict]:
 def main(argv=None) -> int:
     from .http import get_json
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--root", help="storage root (default: PITCHLINE_ROOT)")
+    ap.add_argument("--root", help="storage root (default: SHOTCAST_ROOT)")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     store = get_store(args.root)

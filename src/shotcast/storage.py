@@ -115,7 +115,7 @@ class S3Store:
 
 
 def get_store(root: str | None = None) -> Store:
-    root = root or os.environ.get("PITCHLINE_ROOT", "data")
+    root = root or os.environ.get("SHOTCAST_ROOT", "data")
     if root.startswith("s3://"):
         bucket, _, prefix = root[5:].partition("/")
         return S3Store(bucket, prefix)

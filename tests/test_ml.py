@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 import numpy as np
 import pytest
 
-from pitchline import forecast as fc
-from pitchline import mlcore as ml
+from shotcast import forecast as fc
+from shotcast import mlcore as ml
 
 TEAMS = [f"Club {c}" for c in "ABCDEFGH"]
 
@@ -191,7 +191,7 @@ def test_scorecard_grades_probabilities():
 
 
 def _page(card, matchday=None):
-    from pitchline import site
+    from shotcast import site
     forecast = {"asof": "2026-03-01T06:00:00Z", "model": card, "matchday": matchday or [], "season": {}}
     return site.forecast_page(forecast, {"n": 0})
 
@@ -219,3 +219,19 @@ def test_forecast_page_still_renders_a_forecast_saved_before_these_changes():
     assert "Old Row" in html and "before walk-forward testing was added" in html
     assert "Chance of 1+" not in html and "dispersion" not in html
     assert "baseline only" in _page({"rows": 10, "status": "baseline only", "reason": "needs more", "alpha": None})
+
+
+def test_scorecard_separates_players_who_did_not_play():
+    recs = sim_recs(0.4, 40)
+    now = datetime(2026, 3, 1)
+    kick = (now + timedelta(days=2)).strftime("%Y-%m-%dT15:00Z")
+    rows = [{"league": "eng.1", "event_id": "9001", "kickoff": kick, "team": "A", "opponent": "B", "home": True,
+             "athlete_id": f"a{i}", "player": f"P{i}", "pred": 1.0, "baseline": 1.0} for i in range(10)]
+    played = {"league": "eng.1", "event_id": "9001", "date": kick, "teams": [],
+              "lineup": [{"athlete_id": f"a{i}", "minutes": 90} for i in range(5)],          # only 5 of 10 got on
+              "players": [{"athlete_id": f"a{i}", "shots_on_target": 1} for i in range(5)]}
+    sc = fc.scorecard([{"asof": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "matchday": rows}], recs + [played])
+    assert sc["predicted_total"] == 10.0 and sc["actual_total"] == 5 and sc["model"]["bias"] == 0.5
+    assert sc["played_only"]["n"] == 5 and sc["played_only"]["model"]["bias"] == 0.0   # fair for those who played
+    all_played = dict(played, lineup=[{"athlete_id": f"a{i}", "minutes": 90} for i in range(10)])
+    assert "played_only" not in fc.scorecard([{"asof": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "matchday": rows}], recs + [all_played])

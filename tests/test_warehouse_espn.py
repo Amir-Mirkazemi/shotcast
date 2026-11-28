@@ -4,8 +4,8 @@ import pytest
 
 duckdb = pytest.importorskip("duckdb")
 
-from pitchline.storage import LocalStore  # noqa: E402
-from pitchline.warehouse_espn import load  # noqa: E402
+from shotcast.storage import LocalStore  # noqa: E402
+from shotcast.warehouse_espn import load  # noqa: E402
 
 
 def rec(eid, date="2025-09-01T14:00Z", goals=1, **over):
@@ -86,7 +86,7 @@ def test_invalid_file_is_not_loaded_and_not_retried_until_it_changes(tmp_path):
 
 
 def test_warehouse_totals_match_the_site_leaderboard_numbers(tmp_path):
-    from pitchline.leaderboard import read_records, totals_from_records
+    from shotcast.leaderboard import read_records, totals_from_records
 
     s, db = LocalStore(tmp_path / "d"), str(tmp_path / "w.duckdb")
     for i in range(6):
@@ -103,7 +103,7 @@ def test_warehouse_totals_match_the_site_leaderboard_numbers(tmp_path):
 
 
 def test_repeated_play_ids_get_a_suffix_and_a_loader_version_bump_reloads_everything(tmp_path, monkeypatch):
-    from pitchline import warehouse_espn as w
+    from shotcast import warehouse_espn as w
 
     s, db = LocalStore(tmp_path / "d"), str(tmp_path / "w.duckdb")
     m = rec("1")

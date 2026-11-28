@@ -13,13 +13,13 @@ from .storage import get_store
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="pitchline")
+    ap = argparse.ArgumentParser(prog="shotcast")
     ap.add_argument("command", choices=["ingest", "bronze", "dbt-summary", "all"])
-    ap.add_argument("--root", help="data root: a folder or s3://bucket/prefix (env PITCHLINE_ROOT)")
+    ap.add_argument("--root", help="data root: a folder or s3://bucket/prefix (env SHOTCAST_ROOT)")
     ap.add_argument("--config", help="path to sources.yml")
     ap.add_argument("--limit", type=int, help="max matches per competition (for quick runs)")
     ap.add_argument("--rebuild", action="store_true", help="rebuild bronze even if files exist")
-    ap.add_argument("--health-dir", default=os.environ.get("PITCHLINE_HEALTH", "health"))
+    ap.add_argument("--health-dir", default=os.environ.get("SHOTCAST_HEALTH", "health"))
     ap.add_argument("--dbt-results", default="dbt/target/run_results.json")
     args = ap.parse_args(argv)
 

@@ -42,9 +42,9 @@
     return '<div class="pitch"><svg viewBox="-20 -28 720 580" role="img" aria-label="Shot map">' + PITCH + dots + '</svg></div><p class="note">' + n + ' located shots</p>';
   }
   const ROWS = [['Apps', 'apps'], ['Minutes', 'min'], ['Shots', 'shots'], ['On target', 'sot'], ['On target %', 'acc'],
-    ['Goals', 'goals'], ['Assists', 'assists'], ['On target / 90', 'sot90']];
+    ['Goals', 'goals'], ['Assists', 'assists'], ['On target / 90', 'sot90'], ['xG', 'xg'], ['xA', 'xa']];
   const val = (p, k) => k === 'acc' ? (p.shots ? Math.round(1000 * p.sot / p.shots) / 10 : null) : p[k];
-  const show = (p, k) => { const v = val(p, k); return v === null || v === undefined ? '-' : k === 'acc' ? v.toFixed(1) + '%' : k === 'sot90' ? v.toFixed(2) : Number(v).toLocaleString('en-US'); };
+  const show = (p, k) => { const v = val(p, k); return v === null || v === undefined ? '-' : k === 'acc' ? v.toFixed(1) + '%' : k === 'sot90' ? v.toFixed(2) : (k === 'xg' || k === 'xa') ? v.toFixed(1) : Number(v).toLocaleString('en-US'); };
 
   function render() {
     const { a, b } = picks;
@@ -53,7 +53,7 @@
       : '<div class="cmp-head empty"><span>Pick a second player</span></div>';
     let html = '<div class="cmp-grid">' + head(a) + head(b) + '</div>';
     if (a && b) {
-      html += '<div class="tablewrap"><table class="cmp-table"><tbody>' + ROWS.map(([lab, k]) => {
+      html += '<div class="tablewrap"><table class="cmp-table"><tbody>' + ROWS.filter(([, k]) => val(a, k) != null || val(b, k) != null).map(([lab, k]) => {
         const x = val(a, k), y = val(b, k), ax = x !== null && y !== null && x > y, by = x !== null && y !== null && y > x;
         return '<tr><td class="n' + (ax ? ' lead' : '') + '">' + show(a, k) + '</td><th scope="row">' + lab + '</th><td class="n' + (by ? ' lead' : '') + '">' + show(b, k) + '</td></tr>';
       }).join('') + '</tbody></table></div>';

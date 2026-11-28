@@ -4,9 +4,9 @@ import json
 import pyarrow.parquet as pq
 from conftest import make_events, make_match
 
-from pitchline.bronze import build_bronze, extract_lineup, flatten_event, flatten_match
-from pitchline.config import Competition
-from pitchline.storage import LocalStore
+from shotcast.bronze import build_bronze, extract_lineup, flatten_event, flatten_match
+from shotcast.config import Competition
+from shotcast.storage import LocalStore
 
 COMP = (Competition(99, 1, "Test Cup"),)
 

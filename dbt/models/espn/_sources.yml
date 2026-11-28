@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: espn_raw
     description: >
-      ESPN match files copied into DuckDB by `python -m pitchline.warehouse_espn` (incremental, validated).
+      ESPN match files copied into DuckDB by `python -m shotcast.warehouse_espn` (incremental, validated).
       The JSON files in storage stay the system of record.
     schema: espn_raw
     freshness:

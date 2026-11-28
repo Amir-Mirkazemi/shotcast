@@ -1,7 +1,7 @@
 """Is the data healthy? One report, used by the Data health page and by the daily alert.
 
-    python -m pitchline.health_check --max-days 4          # prints the report, exits 1 when data is stale
-    python -m pitchline.health_check --publish-dbt dbt/target/run_results.json
+    python -m shotcast.health_check --max-days 4          # prints the report, exits 1 when data is stale
+    python -m shotcast.health_check --publish-dbt dbt/target/run_results.json
 
 "Stale" means no competition has a newer match than --max-days ago. Individual competitions go quiet in
 the off-season, so they are shown on the page but do not trigger the alert on their own.
@@ -19,7 +19,7 @@ from .storage import Store, get_store
 
 DBT_KEY = "health/dbt_espn.json"
 LOAD_KEY = "health/warehouse_load.json"
-log = logging.getLogger("pitchline.health")
+log = logging.getLogger("shotcast.health")
 
 
 def _pct(n: int, d: int) -> float | None:

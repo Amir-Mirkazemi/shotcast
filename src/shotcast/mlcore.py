@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-log = logging.getLogger("pitchline.ml")
+log = logging.getLogger("shotcast.ml")
 MIN_ALPHA = 1e-6
 LEVEL = 0.8                    # central interval shown for each forecast
 

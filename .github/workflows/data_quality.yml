@@ -18,8 +18,8 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-east-1
-      PITCHLINE_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
-      PITCHLINE_WAREHOUSE: ${{ github.workspace }}/warehouse/pitchline.duckdb
+      SHOTCAST_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
+      SHOTCAST_WAREHOUSE: ${{ github.workspace }}/warehouse/shotcast.duckdb
       DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
       WAREHOUSE_KEY: s3://${{ vars.S3_BUCKET }}/pitchline/warehouse/espn.duckdb
     steps:
@@ -32,18 +32,18 @@ jobs:
       - name: Restore yesterday's warehouse (so only new matches are loaded)
         run: |
           mkdir -p warehouse
-          aws s3 cp "$WAREHOUSE_KEY" "$PITCHLINE_WAREHOUSE" || echo "no warehouse yet, building from scratch"
+          aws s3 cp "$WAREHOUSE_KEY" "$SHOTCAST_WAREHOUSE" || echo "no warehouse yet, building from scratch"
       - name: Load new and changed matches into DuckDB
-        run: python -m pitchline.warehouse_espn
+        run: python -m shotcast.warehouse_espn
       - name: dbt models and tests
         id: dbt
         continue-on-error: true
         run: cd dbt && dbt build --select tag:espn
       - name: Publish test results for the Data health page
-        run: python -m pitchline.health_check --publish-dbt dbt/target/run_results.json || true
+        run: python -m shotcast.health_check --publish-dbt dbt/target/run_results.json || true
       - name: Save the warehouse for tomorrow
-        run: aws s3 cp "$PITCHLINE_WAREHOUSE" "$WAREHOUSE_KEY"
+        run: aws s3 cp "$SHOTCAST_WAREHOUSE" "$WAREHOUSE_KEY"
       - name: Fail loudly when the data is stale, invalid, or a dbt test failed
         run: |
-          python -m pitchline.health_check --max-days 4
+          python -m shotcast.health_check --max-days 4
           test "${{ steps.dbt.outcome }}" = "success"

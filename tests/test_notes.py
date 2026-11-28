@@ -1,4 +1,4 @@
-from pitchline.notes import shot_notes
+from shotcast.notes import shot_notes
 
 
 def rec(lg, eid, day, players, teams=("A", "B"), totals=None, scores=("2", "1")):

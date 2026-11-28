@@ -32,5 +32,5 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
-          PITCHLINE_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
-        run: python -m pitchline.forecast
+          SHOTCAST_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
+        run: python -m shotcast.forecast
