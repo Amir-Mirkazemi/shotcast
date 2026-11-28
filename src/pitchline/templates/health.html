@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% macro chip(ok, good, bad) %}<span class="chip {{ 'ok' if ok else 'bad' }}">{{ good if ok else bad }}</span>{% endmacro %}
+{% macro when(ts) %}{{ ts[:16]|replace("T", " ") }} UTC{% endmacro %}
+{% block body %}
+{{ m.head("Data health", "#34d399", "Is the data fresh, valid and tested? Checked at every build.") }}
+<div class="strip">
+  <div class="kpi"><b>{{ r.matches|thousands }}</b><span>Matches stored</span></div>
+  <div class="kpi"><b>{{ r.newest or "-" }}</b><span>Newest match{% if r.days_since_newest is not none %} ({{ r.days_since_newest }} day{{ "" if r.days_since_newest == 1 else "s" }} ago){% endif %}</span></div>
+  <div class="kpi"><b>{{ r.invalid.count }}</b><span>Files failing the data contract</span></div>
+  <div class="kpi"><b>{% if r.dbt %}{{ r.dbt.tests_passed }}/{{ r.dbt.tests_total }}{% else %}-{% endif %}</b><span>Warehouse tests passing</span></div>
+</div>
+
+<h2>Freshness and coverage<small>by competition</small></h2>
+<div class="tablewrap"><table class="sortable"><thead><tr><th>Competition</th><th class="n">Matches</th><th>Newest match</th><th class="n">Days ago</th><th class="n opt">Reconciled</th><th class="n opt">With lineup</th><th class="n opt">Shots located</th></tr></thead><tbody>
+{% for c in r.leagues %}<tr><td>{{ c.name }}</td><td class="n">{{ c.matches|thousands }}</td><td>{{ c.last }}</td><td class="n">{{ c.days_since }}</td><td class="n opt">{{ "%.1f%%"|format(c.ok_pct) if c.ok_pct is not none else "-" }}</td><td class="n opt">{{ "%.1f%%"|format(c.lineup_pct) if c.lineup_pct is not none else "-" }}</td><td class="n opt">{{ "%.1f%%"|format(c.located_pct) if c.located_pct is not none else "-" }}</td></tr>{% endfor %}
+</tbody></table></div>
+<p class="note">A competition that is between seasons shows a growing number of days. That is expected. The daily alert only fires when no competition has received a match for several days.</p>
+
+<h2>Data contract{{ " " }}{{ chip(r.invalid.count == 0, "all files pass", "files failing") }}</h2>
+<p class="note">Every stored match file is checked before it is used: two distinct teams with exactly one home side, scores that are whole numbers, an ISO date, player rows only for those two teams, no player with more shots on target than shots (a goal with no listed shot is allowed), minutes between 0 and 150, and only known shot outcomes. A file that fails is quarantined with its reasons and left out of every page.</p>
+{% if r.invalid.count %}
+<ul class="plain">{% for why, n in r.invalid.reasons %}<li>{{ n }} × {{ why }}</li>{% endfor %}</ul>
+<p class="note">Examples: {{ r.invalid.files|join(", ") }}.</p>
+{% endif %}
+
+<h2>Warehouse and tests</h2>
+{% if r.warehouse %}
+<p class="note">Last DuckDB load {{ when(r.warehouse.ts) }}: {{ r.warehouse.loaded }} files loaded, {{ r.warehouse.unchanged|thousands }} unchanged and skipped, {{ r.warehouse.removed }} removed, {{ r.warehouse.invalid }} rejected, in {{ r.warehouse.seconds }} s. Only new or changed files are read.</p>
+{% else %}<p class="note">No warehouse load has been recorded yet.</p>{% endif %}
+{% if r.dbt %}
+<p class="note">dbt build {{ chip(not r.dbt.tests_failed, "passing", "failing") }} {{ r.dbt.models_ok }} models, {{ r.dbt.tests_passed }} of {{ r.dbt.tests_total }} tests passed{% if r.dbt.generated_at %}, run {{ when(r.dbt.generated_at) }}{% endif %}.{% if r.dbt.tests_failed %} Failing: {{ r.dbt.tests_failed|join(", ") }}.{% endif %}{% if r.dbt.tests_warned %} Warnings: {{ r.dbt.tests_warned|join(", ") }}.{% endif %}</p>
+{% else %}<p class="note">No dbt run has been recorded yet.</p>{% endif %}
+
+<h2>Recent pipeline runs</h2>
+{% if r.runs %}
+<div class="tablewrap"><table><thead><tr><th>When</th><th>Job</th><th class="n">New</th><th class="n opt">Skipped</th><th class="n">Failed</th><th class="n opt">Quarantined</th><th class="n opt">Seconds</th></tr></thead><tbody>
+{% for x in r.runs %}<tr><td>{{ when(x.ts) }}</td><td>{{ x.kind|replace("_", " ") }}</td><td class="n">{{ x.new|default("-") }}</td><td class="n opt">{{ x.skipped|default("-") }}</td><td class="n">{{ x.failed|default("-") }}</td><td class="n opt">{{ x.quarantined|default("-") }}</td><td class="n opt">{{ x.seconds|default("-") }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<p class="note">No runs recorded yet. The nightly job writes one record per run.</p>{% endif %}
+<p class="note">Page built {{ stamp }} UTC.</p>
+{% endblock %}

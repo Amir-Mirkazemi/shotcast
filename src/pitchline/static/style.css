@@ -237,3 +237,7 @@ footer { color:var(--muted); font-size:.82rem; padding:34px 0 48px; margin-top:4
 @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .anim .dot { animation:none; opacity:var(--o,.95); } .anim .trail { display:none; } }
 
 .mapbox.nomap { grid-template-columns:1fr; }
+
+.chip { display:inline-block; font-size:.78rem; font-weight:600; padding:2px 10px; border-radius:999px; border:1px solid var(--line); vertical-align:middle; }
+.chip.ok { color:var(--accent-hi); border-color:var(--accent-hi); } .chip.ok::before { content:"\2713 "; }
+.chip.bad { color:var(--red); border-color:var(--red); } .chip.bad::before { content:"! "; }

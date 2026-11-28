@@ -25,7 +25,8 @@ def _summary(n_home, n_home_on, boxscore_total=None):
 
 def _event(eid="1"):
     return {"id": eid, "date": "2024-01-01T12:00Z", "status": {"type": {"completed": True}},
-            "competitions": [{"competitors": [{"team": {"displayName": "Home"}, "homeAway": "home", "score": "1"}]}]}
+            "competitions": [{"competitors": [{"team": {"displayName": "Home"}, "homeAway": "home", "score": "1"},
+                                                {"team": {"displayName": "Away"}, "homeAway": "away", "score": "0"}]}]}
 
 
 def make_fetch(summary, log=None):

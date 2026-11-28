@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: espn_raw
+    description: >
+      ESPN match files copied into DuckDB by `python -m pitchline.warehouse_espn` (incremental, validated).
+      The JSON files in storage stay the system of record.
+    schema: espn_raw
+    freshness:
+      warn_after: {count: 2, period: day}
+      error_after: {count: 5, period: day}
+    loaded_at_field: loaded_at
+    tables:
+      - name: matches
+      - name: players
+        freshness: null
+      - name: lineups
+        freshness: null
+      - name: shots
+        freshness: null

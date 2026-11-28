@@ -22,6 +22,7 @@ from markupsafe import Markup
 
 from . import cards
 from .forecast import load_forecasts, scorecard
+from .health_check import build_report
 from .insights import (
     career_table,
     club_stints,
@@ -31,7 +32,7 @@ from .insights import (
     player_history,
     season_rows,
 )
-from .leaderboard import read_records, totals_from_records
+from .leaderboard import read_valid, totals_from_records
 from .notes import shot_notes
 from .sitedata import (
     MIN_MINUTES_BEST,
@@ -494,6 +495,12 @@ def how_page(model: dict, stamp: str) -> str:
                   page_id="how", stamp=stamp, total=total, ok=ok, pct=100 * ok / total if total else 0)
 
 
+def health_page(report: dict, stamp: str) -> str:
+    report = {**report, "leagues": [{**c, "name": lname(c["league"])} for c in report["leagues"]]}
+    return render("health.html", title=f"Data health | {SITE_NAME}", desc="Freshness, validation and test results for the data behind the site.",
+                  path="health.html", image="og-home.png", page_id="health", r=report, stamp=stamp)
+
+
 def method_page(model: dict, stamp: str) -> str:
     rows = [{"name": lname(lg), **c, "pct": 100 * c["ok"] / c["matches"] if c["matches"] else 0, "span": _span(c)}
             for lg, c in sorted(((k, v["cov"]) for k, v in model["leagues"].items()), key=lambda kv: lname(kv[0]))]
@@ -550,7 +557,7 @@ def _compare_files(allrows: list[dict], linked: set, model: dict, career: dict) 
 
 
 def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 50) -> list[Path]:
-    recs = read_records(store)
+    recs, invalid = read_valid(store)
     players, coverage = totals_from_records(recs)
     if not coverage:
         raise SystemExit("No matches stored yet: nothing to build.")
@@ -559,6 +566,7 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
     latest_fc = fcs[-1] if fcs else None
     sc = scorecard(fcs, recs)
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M")
+    report = build_report(store, recs, invalid, today=(now.date() if now else None))
     linked_all = {(lg, pid) for lg, v in model["leagues"].items() for pid in featured_ids(v["rows"])}
     allrows = combined_rows(players)
     watch = []
@@ -578,7 +586,7 @@ def build(store, out_dir: str | Path, now: datetime | None = None, top_n: int = 
         "index.html": index_page(model, len(players), stamp, home_notes, watch),
         "method.html": method_page(model, stamp), "about.html": about_page(), "live.html": live_page(latest_fc),
         "how.html": how_page(model, stamp), "news.html": news_page(shot_notes(recs, players, lname, limit=60), linked_all),
-        "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc), "compare.html": compare_page()}
+        "health.html": health_page(report, stamp), "forecast.html": forecast_page(latest_fc, sc), "call.html": call_page(latest_fc), "compare.html": compare_page()}
     files.update(match_files)
     files.update(_compare_files(allrows, linked_all, model, career))
     search = []

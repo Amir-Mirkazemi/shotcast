@@ -1,0 +1,49 @@
+name: data-quality
+
+# Daily: load new matches into DuckDB (incremental), run the dbt models and tests, publish the results for the
+# Data health page, and fail the run (GitHub emails the owner) when data is stale, invalid or a test fails.
+# Runs after the nightly backfill (09:30 UTC) and before the site build (14:00 UTC).
+on:
+  schedule:
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+
+concurrency: data-quality
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: us-east-1
+      PITCHLINE_ROOT: s3://${{ vars.S3_BUCKET }}/pitchline
+      PITCHLINE_WAREHOUSE: ${{ github.workspace }}/warehouse/pitchline.duckdb
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
+      WAREHOUSE_KEY: s3://${{ vars.S3_BUCKET }}/pitchline/warehouse/espn.duckdb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-pipeline.txt && pip install -e .
+      - name: Restore yesterday's warehouse (so only new matches are loaded)
+        run: |
+          mkdir -p warehouse
+          aws s3 cp "$WAREHOUSE_KEY" "$PITCHLINE_WAREHOUSE" || echo "no warehouse yet, building from scratch"
+      - name: Load new and changed matches into DuckDB
+        run: python -m pitchline.warehouse_espn
+      - name: dbt models and tests
+        id: dbt
+        continue-on-error: true
+        run: cd dbt && dbt build --select tag:espn
+      - name: Publish test results for the Data health page
+        run: python -m pitchline.health_check --publish-dbt dbt/target/run_results.json || true
+      - name: Save the warehouse for tomorrow
+        run: aws s3 cp "$PITCHLINE_WAREHOUSE" "$WAREHOUSE_KEY"
+      - name: Fail loudly when the data is stale, invalid, or a dbt test failed
+        run: |
+          python -m pitchline.health_check --max-days 4
+          test "${{ steps.dbt.outcome }}" = "success"

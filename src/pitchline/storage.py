@@ -18,6 +18,7 @@ class Store(Protocol):
     def read_bytes(self, key: str) -> bytes: ...
     def write_bytes(self, key: str, data: bytes) -> None: ...
     def list_keys(self, prefix: str) -> list[str]: ...
+    def fingerprints(self, prefix: str) -> dict[str, str]: ...
     def uri(self, key: str) -> str: ...
 
 
@@ -48,6 +49,14 @@ class LocalStore:
         if not base.exists():
             return []
         return sorted(str(p.relative_to(self._path)) for p in base.rglob("*") if p.is_file())
+
+    def fingerprints(self, prefix: str) -> dict[str, str]:
+        """key -> a short string that changes whenever the file's content changes (size + mtime here)."""
+        out = {}
+        for k in self.list_keys(prefix):
+            st = self._p(k).stat()
+            out[k] = f"{st.st_size}-{st.st_mtime_ns}"
+        return out
 
     def uri(self, key: str) -> str:
         return str(self._p(key).resolve())
@@ -90,6 +99,16 @@ class S3Store:
                 k = obj["Key"]
                 keys.append(k[len(self.prefix) + 1 :] if self.prefix else k)
         return sorted(keys)
+
+    def fingerprints(self, prefix: str) -> dict[str, str]:
+        """key -> ETag. S3 returns it in the listing itself, so no file has to be downloaded to compare."""
+        out: dict[str, str] = {}
+        pager = self._s3.get_paginator("list_objects_v2")
+        for page in pager.paginate(Bucket=self.bucket, Prefix=self._k(prefix)):
+            for obj in page.get("Contents", []):
+                k = obj["Key"]
+                out[k[len(self.prefix) + 1 :] if self.prefix else k] = obj["ETag"].strip('"')
+        return out
 
     def uri(self, key: str) -> str:
         return f"s3://{self.bucket}/{self._k(key)}"

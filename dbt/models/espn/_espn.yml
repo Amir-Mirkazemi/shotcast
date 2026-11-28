@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: stg_espn_matches
+    columns:
+      - name: match_id
+        data_tests: [unique, not_null]
+      - name: match_date
+        data_tests: [not_null]
+      - name: result
+        data_tests:
+          - accepted_values: {arguments: {values: [home, away, draw]}, config: {severity: warn}}
+  - name: stg_espn_shots
+    columns:
+      - name: shot_id
+        data_tests: [unique, not_null]
+      - name: outcome
+        data_tests:
+          - accepted_values: {arguments: {values: [goal, saved, woodwork, off_target, blocked, own_goal]}}
+      - name: match_id
+        data_tests:
+          - relationships: {arguments: {to: ref('stg_espn_matches'), field: match_id}}
+  - name: dim_espn_match
+    columns:
+      - name: match_id
+        data_tests: [unique, not_null]
+  - name: dim_espn_team
+    columns:
+      - name: team_name
+        data_tests: [unique, not_null]
+  - name: dim_espn_player
+    columns:
+      - name: athlete_id
+        data_tests: [unique, not_null]
+  - name: fct_espn_player_match
+    description: One row per player per match (grain).
+    columns:
+      - name: player_match_id
+        data_tests: [unique, not_null]
+      - name: match_id
+        data_tests:
+          - relationships: {arguments: {to: ref('dim_espn_match'), field: match_id}}
+      - name: athlete_id
+        data_tests:
+          - relationships: {arguments: {to: ref('dim_espn_player'), field: athlete_id}}
+  - name: fct_espn_shot
+    columns:
+      - name: shot_id
+        data_tests: [unique, not_null]
+  - name: mart_espn_player_season
+    columns:
+      - name: athlete_id
+        data_tests: [not_null]

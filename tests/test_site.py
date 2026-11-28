@@ -46,12 +46,16 @@ def test_build_writes_every_page_type_escapes_names_and_maps_shots(tmp_path):
          [_p("A", star, 4, 3, goals=1, aid="1"), _p("B", "José Ñ", 5, 1, aid="2")],
          lineup=[{"team": "A", "athlete_id": "1", "player": star, "minutes": 90}],
          shots=[_shot(star, 0.1, 0.5, outcome="goal"), _shot(star, 0.0, 0.0)])
-    _put(s, "esp.1", "9", "2025-08-17T14:00Z", [_p("C", "Zed", 9, 9, aid="3")], coverage="mismatch")
+    _put(s, "esp.1", "9", "2025-08-17T14:00Z", [_p("C", "Zed", 9, 9, aid="3")], coverage="mismatch",
+         teams=[{"name": "C", "home": True, "score": "0"}, {"name": "D", "home": False, "score": "0"}])
     out = tmp_path / "site"
     site.build(s, out)
     names = {p.name for p in out.iterdir()}
     assert {"index.html", "method.html", "eng.1.html", "esp.1.html", "players.json", "style.css", "app.js",
-            ".nojekyll", "p-eng.1-1.html", "t-eng.1-a.html", "t-eng.1-b.html"} <= names
+            ".nojekyll", "p-eng.1-1.html", "t-eng.1-a.html", "t-eng.1-b.html", "health.html"} <= names
+    health = (out / "health.html").read_text()
+    assert "Data health" in health and "Premier League" in health and "No dbt run has been recorded" in health
+    assert 'href="health.html"' in (out / "index.html").read_text()
     assert "Premier League" in (out / "index.html").read_text()
     league = (out / "eng.1.html").read_text()
     assert "<b>Haaland" not in league and "&lt;b&gt;Haaland" in league and "José Ñ" in league
@@ -158,3 +162,15 @@ def test_matchday_data_groups_and_limits():
     out = matchday_data(fc, per_match=3)
     assert list(out) == ["eng.1:1"] and len(out["eng.1:1"]) == 3
     assert matchday_data(None) == {}
+
+
+def test_build_skips_and_quarantines_records_that_break_the_data_contract(tmp_path):
+    s = LocalStore(tmp_path / "data")
+    _put(s, "eng.1", "1", "2025-08-16T14:00Z", [_p("A", "Good Player", 4, 2, aid="1")])
+    _put(s, "eng.1", "2", "2025-08-17T14:00Z", [_p("A", "Bad Player", 1, 5, aid="2")])      # 5 on target, 1 shot
+    out = tmp_path / "site"
+    site.build(s, out)
+    assert "Good Player" in (out / "players.json").read_text()
+    assert "Bad Player" not in (out / "players.json").read_text()
+    q = json.loads(s.read_bytes("espn/quarantine/eng.1/2.json"))
+    assert "on target but 1 shots" in q["reasons"][0]

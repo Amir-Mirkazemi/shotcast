@@ -169,6 +169,26 @@ player shot and chance creation totals across years and updates as matches finis
 - StatsBomb open data is used under its attribution terms. Credit: StatsBomb.
 
 
+## Data quality and warehouse
+
+The JSON match files in S3 are the system of record. Three layers sit on top of them:
+
+| Layer | Code | What it guarantees |
+|---|---|---|
+| Data contract | `schemas.py` (Pydantic) | Every match file is validated when it is written and again before the site is built. A file that fails goes to `espn/quarantine/` with its reasons and is left out of every page. |
+| Warehouse | `warehouse_espn.py`, `dbt/models/espn` | Matches are loaded into DuckDB incrementally: each file has a fingerprint (S3 ETag) taken from the listing, so unchanged files are never downloaded. dbt builds staging models, `dim_espn_match/team/player`, `fct_espn_player_match` (one row per player per match), `fct_espn_shot` and `mart_espn_player_season`. |
+| Observability | `logs.py`, `health_check.py`, `data_quality.yml` | JSON logs in CI, one run record per job in `runs/`, and a daily check that fails the workflow (GitHub emails the owner) when no competition has a new match for 4 days, a file fails the contract, or a dbt test fails. The results are published on the site's [Data health](https://amir-mirkazemi.github.io/shotcast/health.html) page. |
+
+dbt runs 24 tests on the ESPN models: unique and not-null keys, relationships between facts and dimensions, accepted shot outcomes, and three singular tests (shots on target never above shots, minutes between 0 and 150, a team's players never score more than the team's score). `tests/test_dbt_espn.py` runs the real dbt build on a fixture warehouse, including a case where bad data must make a test fail. `tests/test_warehouse_espn.py` checks that the warehouse totals equal the numbers the site shows.
+
+```
+make espn      # load new matches into DuckDB, run the ESPN dbt models and tests
+make validate  # check every stored match file against the data contract
+make check     # data health report, exit code 1 when something is wrong
+```
+
+Not done on purpose: the nightly job restores the previous DuckDB file from S3, so it is incremental across runs, but the site itself is still built straight from the JSON files, not from the warehouse. Moving the site's queries onto the dbt marts is the next step once the marts have run in production for a while.
+
 ## Website architecture
 
 The site is static files on GitHub Pages: no server, no database, no framework. It is rebuilt after every nightly run.

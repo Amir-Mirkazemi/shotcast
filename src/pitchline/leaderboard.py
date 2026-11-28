@@ -28,14 +28,29 @@ def _new_row(lg: str, name: str, team: str, athlete_id: str = "") -> dict:
             "last_date": ""}        # newest stored match date: used to find a player's current club
 
 
-def read_records(store: Store, league: str | None = None, workers: int = 16) -> list[dict]:
-    """Every stored match file, oldest first. Reads in parallel because S3 reads are slow one at a time."""
+def read_keyed(store: Store, league: str | None = None, workers: int = 16) -> list[tuple[str, dict]]:
+    """(key, record) for every stored match file; reads in parallel because S3 is slow one at a time."""
     prefix = PREFIX + (f"{league}/" if league else "")
-    keys = [k for k in store.list_keys(prefix) if k.endswith(".json")]
+    keys = sorted(k for k in store.list_keys(prefix) if k.endswith(".json"))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         recs = list(pool.map(lambda k: json.loads(store.read_bytes(k)), keys))
+    return list(zip(keys, recs, strict=True))
+
+
+def read_records(store: Store, league: str | None = None, workers: int = 16) -> list[dict]:
+    """Every stored match file, oldest first."""
+    recs = [r for _, r in read_keyed(store, league, workers)]
     recs.sort(key=lambda r: r.get("date") or "")          # oldest first, so "team" ends as the latest
     return recs
+
+
+def read_valid(store: Store, league: str | None = None) -> tuple[list[dict], list[dict]]:
+    """(records meeting the data contract, oldest first; problems). Failing files are quarantined."""
+    from .schemas import split_valid
+
+    good, bad = split_valid(store, read_keyed(store, league))
+    good.sort(key=lambda r: r.get("date") or "")
+    return good, bad
 
 
 def load_totals(store: Store, league: str | None = None) -> tuple[dict, dict]:

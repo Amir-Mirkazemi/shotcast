@@ -5,6 +5,7 @@ export PITCHLINE_ROOT ?= data
 export PITCHLINE_BRONZE ?= ../data/bronze
 export PITCHLINE_WAREHOUSE ?= ../warehouse/pitchline.duckdb
 export DBT_PROFILES_DIR ?= .
+PITCHLINE_WAREHOUSE_ABS ?= $(CURDIR)/warehouse/pitchline.duckdb
 
 help:  ## Show this help
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -36,6 +37,16 @@ sample:  ## Quick run: 3 matches, same steps (what CI does)
 	$(PY) -m pitchline all --config config/ci_sources.yml --limit 3
 	mkdir -p warehouse && cd dbt && dbt build
 	$(PY) -m pitchline dbt-summary
+
+espn:  ## Load stored ESPN matches into DuckDB (incremental), run their dbt models and tests
+	$(PY) -m pitchline.warehouse_espn --db $(PITCHLINE_WAREHOUSE_ABS)
+	cd dbt && dbt build --select tag:espn
+
+validate:  ## Check every stored ESPN match file against the data contract
+	$(PY) -c "from pitchline.schemas import scan; from pitchline.storage import get_store; import json; print(json.dumps(scan(get_store()), indent=2)[:4000])"
+
+check:  ## Data health report; exits 1 when data is stale, invalid, or a test failed
+	$(PY) -m pitchline.health_check --max-days 4
 
 docs:  ## Generate and open dbt docs (lineage graph)
 	cd dbt && dbt docs generate && dbt docs serve

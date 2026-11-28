@@ -37,7 +37,7 @@ def _shot(name, x, y, outcome):
 def site_dir(tmp_path_factory):
     root = tmp_path_factory.mktemp("e2e")
     store = LocalStore(root / "data")
-    stars = [("Arsenal", "Bukayo Saka", "11"), ("Chelsea", "Cole Palmer", "22"), ("Liverpool", "Mo Salah", "33")]
+    stars = [("Arsenal", "Bukayo Saka", "11"), ("Chelsea", "Cole Palmer", "22"), ("Chelsea", "Mo Salah", "33")]
     for i in range(12):
         day = f"2025-09-{i + 1:02d}"
         for lg in ("eng.1", "esp.1"):
@@ -214,6 +214,14 @@ def test_score_links_to_a_match_report(page):
     assert page.errors == []
 
 
+def test_data_health_page_reports_freshness_and_validation(page):
+    page.goto(page.base + "/health.html")
+    expect(page.locator("h1")).to_have_text("Data health")
+    expect(page.get_by_role("heading", name="Data contract")).to_be_visible()
+    expect(page.locator("table").first).to_contain_text("Premier League")
+    assert page.errors == []
+
+
 def test_mobile_menu_opens_and_navigates(phone):
     phone.goto(phone.base + "/index.html")
     expect(phone.locator("#nav")).to_be_hidden()
@@ -224,13 +232,13 @@ def test_mobile_menu_opens_and_navigates(phone):
 
 
 def test_no_horizontal_scroll_on_mobile(phone):
-    for path in ("/index.html", "/eng.1.html", "/p-eng.1-11.html", "/forecast.html", "/news.html", "/compare.html?a=11&b=22"):
+    for path in ("/index.html", "/eng.1.html", "/p-eng.1-11.html", "/forecast.html", "/news.html", "/compare.html?a=11&b=22", "/health.html"):
         phone.goto(phone.base + path)
         assert phone.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), path
 
 
 def test_every_page_loads_with_no_console_errors(page):
-    for path in ("about.html", "method.html", "how.html", "best.html", "live.html", "call.html", "forecast.html"):
+    for path in ("about.html", "method.html", "how.html", "best.html", "live.html", "call.html", "forecast.html", "health.html"):
         page.goto(f"{page.base}/{path}")
         expect(page.locator("h1").first).to_be_visible()
     # the live page fetches GitHub for scores; a network failure there is expected offline, anything else is not

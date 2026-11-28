@@ -17,6 +17,8 @@ from datetime import date, datetime, timedelta, timezone
 
 from .espn_shots import classify_type, entry_play_id, parse_shots
 from .http import HttpStatus, get_json
+from .logs import configure, record_run
+from .schemas import quarantine, validate_record
 from .storage import Store, get_store
 
 BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
@@ -298,6 +300,11 @@ def process_event(store: Store, league: str, ev: dict, fetch, retry_bad: bool = 
                     len(summary.get("commentary", [])), len(shots), "; ".join(detail))
         for line in suspicious_lines(summary, shots):
             log.warning("  event %s %s", ev["id"], line)
+    reasons = validate_record(rec)
+    if reasons:                                   # a broken record never reaches the data the site reads
+        quarantine(store, rec, key, reasons)
+        log.error("event %s quarantined: %s", ev["id"], "; ".join(reasons[:3]))
+        return "quarantined"
     store.write_bytes(key, json.dumps(rec).encode())
     return rec["coverage"]
 
@@ -325,7 +332,8 @@ def backfill(store: Store, league: str, start: date, end: date, fetch=None, slee
             stats["new"] += 1
             stats[cov] = stats.get(cov, 0) + 1
             sleep(1)
-    log.info("%s %s..%s %s", league, start, end, stats)
+    counts = {k: v for k, v in stats.items() if isinstance(v, int)}
+    log.info("%s %s..%s %s", league, start, end, stats, extra={"league": league, **counts})
     return stats
 
 
@@ -352,7 +360,7 @@ def main(argv=None) -> int:
                     help="re-download matches stored in an older file layout (adds athlete ids and minutes)")
     ap.add_argument("--max-minutes", type=float, default=300)
     a = ap.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    configure()
     parse = lambda s: datetime.strptime(s, "%Y-%m-%d").date()  # noqa: E731
     store = get_store(a.root)
     if a.targets:
@@ -369,6 +377,7 @@ def main(argv=None) -> int:
     else:
         ap.error("give --targets, --recent, or --league with --from and --to")
     t0, bad = time.monotonic(), False
+    total: dict[str, int] = {}
     for t in targets:
         left = a.max_minutes - (time.monotonic() - t0) / 60
         if left <= 0:
@@ -377,6 +386,14 @@ def main(argv=None) -> int:
         stats = backfill(store, t["league"], parse(str(t["from"])), parse(str(t["to"])),
                          window=a.window, max_minutes=left, retry_bad=a.retry_bad, upgrade=a.upgrade)
         bad = bad or bool(stats["failed"] and not stats["new"])
+        for k, v in stats.items():
+            if isinstance(v, int) and not isinstance(v, bool):
+                total[k] = total.get(k, 0) + v
+    record_run(store, "espn_backfill", {"targets": len(targets), "seconds": round(time.monotonic() - t0, 1),
+                                        "new": total.get("new", 0), "skipped": total.get("skipped", 0),
+                                        "failed": total.get("failed", 0),
+                                        "quarantined": total.get("quarantined", 0),
+                                        "listed": total.get("listed", 0)})
     return 1 if bad else 0
 
 
